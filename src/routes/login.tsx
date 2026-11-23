@@ -8,6 +8,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { LoaderCircle, LockKeyhole } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
+import { PasswordInput } from "#/components/password-input";
 import { Button } from "#/components/ui/button";
 import {
 	Card,
@@ -16,7 +17,6 @@ import {
 	CardHeader,
 	CardTitle,
 } from "#/components/ui/card";
-import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
 import { getAuthState, login } from "#/server/auth";
 
@@ -85,10 +85,9 @@ function LoginPage() {
 						/>
 						<div className="grid gap-2">
 							<Label htmlFor="password">Password</Label>
-							<Input
+							<PasswordInput
 								id="password"
 								name="password"
-								type="password"
 								autoComplete="current-password"
 								required
 								autoFocus

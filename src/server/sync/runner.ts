@@ -1,5 +1,5 @@
 import "@tanstack/react-start/server-only";
-import { and, desc, eq, min } from "drizzle-orm";
+import { and, desc, eq, gt, lt, min } from "drizzle-orm";
 import {
 	ClickUpAuthError,
 	type ClickUpClient,
@@ -18,6 +18,11 @@ export type SyncKind = "backfill" | "incremental" | "reconcile";
 // Overlap between incremental windows, to absorb clock skew with ClickUp.
 const CURSOR_OVERLAP_MS = 5 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
+// No run takes this long (a backfill of ~6k tasks is under 2 minutes). A
+// "running" row younger than this belongs to a live process, possibly another
+// server on the same database file; an older one is a crashed run.
+const STALE_RUN_MS = 30 * 60 * 1000;
+export const INTERRUPTED = "Interrupted";
 
 let running: { kind: SyncKind; progress: number } | null = null;
 // Set on a 401 so the scheduler stops retrying a bad token every interval.
@@ -52,6 +57,7 @@ export function lastRun(db: Db, kind?: SyncKind, status?: "ok") {
 export function startSync(requested?: SyncKind): boolean {
 	if (running) return false;
 	const db = getDb();
+	if (runningElsewhere(db)) return false;
 	const kind: SyncKind = !lastRun(db, "backfill", "ok")
 		? "backfill"
 		: (requested ?? "incremental");
@@ -114,6 +120,7 @@ async function run(db: Db, kind: SyncKind) {
 				finishedAt: new Date(),
 				tasksUpserted: upserted,
 				requests: c.requestCount,
+				error: null,
 			})
 			.where(eq(syncRuns.id, runId))
 			.run();
@@ -136,10 +143,30 @@ async function run(db: Db, kind: SyncKind) {
 	}
 }
 
-// A run left as "running" means the process died mid-sync.
+function runningElsewhere(db: Db) {
+	return Boolean(
+		db
+			.select({ id: syncRuns.id })
+			.from(syncRuns)
+			.where(
+				and(
+					eq(syncRuns.status, "running"),
+					gt(syncRuns.startedAt, new Date(Date.now() - STALE_RUN_MS)),
+				),
+			)
+			.get(),
+	);
+}
+
+// A stale "running" row means a process died mid-sync.
 export function markInterruptedRuns(db: Db) {
 	db.update(syncRuns)
-		.set({ status: "error", finishedAt: new Date(), error: "Interrupted" })
-		.where(eq(syncRuns.status, "running"))
+		.set({ status: "error", finishedAt: new Date(), error: INTERRUPTED })
+		.where(
+			and(
+				eq(syncRuns.status, "running"),
+				lt(syncRuns.startedAt, new Date(Date.now() - STALE_RUN_MS)),
+			),
+		)
 		.run();
 }

@@ -21,6 +21,8 @@ export function getDb(): Db {
 		mkdirSync(dirname(DATABASE_PATH), { recursive: true });
 		const sqlite = new Database(DATABASE_PATH);
 		sqlite.pragma("journal_mode = WAL");
+		// Wait for another connection's write instead of failing at once.
+		sqlite.pragma("busy_timeout = 5000");
 		sqlite.pragma("foreign_keys = ON");
 		db = drizzle(sqlite, { schema, casing: "snake_case" });
 		migrate(db, { migrationsFolder: MIGRATIONS_DIR });
