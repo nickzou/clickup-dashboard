@@ -13,9 +13,10 @@ jobs:
         with:
           fetch-depth: 0
       # Fails the build if a token, password hash or other secret is committed.
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Scans the whole history: the repo is small, and gitleaks-action's
+      # commit-range mode breaks on a branch's first push.
+      - name: Scan for secrets
+        run: docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" zricethezav/gitleaks:v8.24.3 git /repo --redact -v
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
