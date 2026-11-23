@@ -1,0 +1,20 @@
+# Base service definition. Locally: `docker compose up --build` serves the
+# production build on http://localhost:3400. On the server it is combined with
+# compose.prod.yaml:
+#   docker compose -f compose.yaml -f compose.prod.yaml up -d
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Fixed inside the container, whatever .env says.
+      DATABASE_PATH: /data/clickup.db
+    ports:
+      - "3400:3000"
+    volumes:
+      - data:/data
+
+volumes:
+  data:

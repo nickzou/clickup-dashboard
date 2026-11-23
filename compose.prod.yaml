@@ -1,0 +1,57 @@
+# Production override. Use together with compose.yaml:
+#   docker compose -f compose.yaml -f compose.prod.yaml up -d
+#
+# TLS and routing are handled by the server-wide Traefik container, which
+# discovers this service through the labels below on the external `proxy`
+# network. The app is never published on a host port.
+#
+# Contract with the Traefik setup (provisions repo): an entrypoint named
+# `websecure` and a certificate resolver named `letsencrypt`.
+
+services:
+  app:
+    image: ghcr.io/nickzou/clickup-dashboard:${IMAGE_TAG:-latest}
+    build: !reset null
+    ports: !reset []
+    networks:
+      - proxy
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: proxy
+      traefik.http.services.overview.loadbalancer.server.port: "3000"
+      traefik.http.routers.overview.rule: "Host(`${SITE_HOST:?Set SITE_HOST in .env}`)"
+      traefik.http.routers.overview.entrypoints: websecure
+      traefik.http.routers.overview.tls.certresolver: letsencrypt
+      traefik.http.routers.overview.middlewares: overview-headers,overview-ratelimit
+      traefik.http.middlewares.overview-headers.headers.stsSeconds: "31536000"
+      traefik.http.middlewares.overview-headers.headers.contentTypeNosniff: "true"
+      traefik.http.middlewares.overview-headers.headers.frameDeny: "true"
+      traefik.http.middlewares.overview-headers.headers.referrerPolicy: "same-origin"
+      traefik.http.middlewares.overview-headers.headers.customResponseHeaders.X-Robots-Tag: "noindex, nofollow"
+      # Coarse per-IP limit in front of the app's own login limiter.
+      traefik.http.middlewares.overview-ratelimit.ratelimit.average: "30"
+      traefik.http.middlewares.overview-ratelimit.ratelimit.burst: "60"
+
+  # Nightly consistent copy of the database into a host directory, so the
+  # server-level snapshots always contain a usable file. Keeps 7 days. Runs as
+  # root so it can write to the root-owned /var/backups directory.
+  backup:
+    image: ghcr.io/nickzou/clickup-dashboard:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    user: root
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      DATABASE_PATH: /data/clickup.db
+      BACKUP_DIR: /backups
+    volumes:
+      - data:/data
+      - /var/backups/clickup-dashboard:/backups
+    command: ["node", "scripts/backup.mjs"]
+    healthcheck:
+      disable: true
+
+networks:
+  proxy:
+    external: true
