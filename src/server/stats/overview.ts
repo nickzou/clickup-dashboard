@@ -1,5 +1,15 @@
 import "@tanstack/react-start/server-only";
-import { and, asc, eq, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
+import {
+	and,
+	asc,
+	eq,
+	gte,
+	isNotNull,
+	isNull,
+	lte,
+	notInArray,
+	sql,
+} from "drizzle-orm";
 import type { Db } from "../db/client";
 import { lists, spaces, tasks } from "../db/schema";
 import { addDays, dayKey, dayRange, weekStart } from "./dates";
@@ -8,6 +18,11 @@ import { RANGES, type RangeDef, type RangeKey } from "./ranges";
 
 const DONE_TYPES = ["done", "closed"];
 const HEATMAP_WEEKS = 53;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Tasks due today by state. Excluded outcomes aren't counted at all.
+type Due = { done: number; notDone: number; open: number; total: number };
+const emptyDue = (): Due => ({ done: 0, notDone: 0, open: 0, total: 0 });
 
 // When a task was marked complete: when it entered a done status, else when
 // it closed.
@@ -127,12 +142,51 @@ export function getOverviewStats(
 		.where(and(scope, notInArray(tasks.statusType, DONE_TYPES)))
 		.all();
 	let overdue = 0;
-	let dueToday = 0;
 	for (const t of open) {
-		if (t.due === null) continue;
-		const key = dayKey(t.due, tz);
-		if (key < today) overdue++;
-		else if (key === today) dueToday++;
+		if (t.due !== null && dayKey(t.due, tz) < today) overdue++;
+	}
+
+	// Tasks due today and how many are done (completed or partial, early
+	// counts). Excluded outcomes (skipped, no action needed) drop out.
+	const dueTodayRows = db
+		.select({
+			due: tasks.dueDate,
+			status: tasks.status,
+			statusType: tasks.statusType,
+			spaceId: tasks.spaceId,
+			listId: tasks.listId,
+		})
+		.from(tasks)
+		.where(
+			and(
+				scope,
+				// Two days either side covers any time zone; filtered by day below.
+				gte(tasks.dueDate, now - 2 * DAY_MS),
+				lte(tasks.dueDate, now + 2 * DAY_MS),
+			),
+		)
+		.all();
+	const dueToday = emptyDue();
+	const dueTodayByList = new Map<string, Due & { spaceId: string }>();
+	for (const t of dueTodayRows) {
+		if (t.due === null || dayKey(t.due, tz) !== today) continue;
+		const outcome = outcomeOf(t.status, t.statusType);
+		if (outcome === "excluded") continue;
+		const bucket =
+			outcome === "completed" || outcome === "partial"
+				? "done"
+				: outcome === "notDone"
+					? "notDone"
+					: "open";
+		const list = dueTodayByList.get(t.listId) ?? {
+			...emptyDue(),
+			spaceId: t.spaceId,
+		};
+		for (const d of [dueToday, list]) {
+			d[bucket]++;
+			d.total++;
+		}
+		dueTodayByList.set(t.listId, list);
 	}
 
 	const spaceNames = new Map(
@@ -150,21 +204,51 @@ export function getOverviewStats(
 			.all()
 			.map((l) => [l.id, l.name]),
 	);
-	const bySpace = [...perSpaceInRange]
-		.map(([id, count]) => ({
-			id,
-			name: spaceNames.get(id) ?? "Unknown",
-			count,
-			lists: [...perListInRange]
-				.filter(([, l]) => l.spaceId === id)
-				.map(([listId, l]) => ({
+	// On Today, lists with tasks due today appear even before anything in
+	// them is done, and every row carries its "done of due" count.
+	const showDue = range === "today";
+	const spaceIds = new Set(perSpaceInRange.keys());
+	const listIds = new Set(perListInRange.keys());
+	if (showDue) {
+		for (const [listId, l] of dueTodayByList) {
+			spaceIds.add(l.spaceId);
+			listIds.add(listId);
+		}
+	}
+	const listSpace = (listId: string) =>
+		perListInRange.get(listId)?.spaceId ?? dueTodayByList.get(listId)?.spaceId;
+	const dueOf = (d?: Due): Due | undefined => {
+		if (!showDue) return undefined;
+		const { done, notDone, open, total } = d ?? emptyDue();
+		return { done, notDone, open, total };
+	};
+
+	const bySpace = [...spaceIds]
+		.map((id) => {
+			const spaceLists = [...listIds]
+				.filter((listId) => listSpace(listId) === id)
+				.map((listId) => ({
 					id: listId,
 					name: listNames.get(listId) ?? "Unknown list",
-					count: l.points,
+					count: perListInRange.get(listId)?.points ?? 0,
+					due: dueOf(dueTodayByList.get(listId)),
 				}))
-				.sort((a, b) => b.count - a.count),
-		}))
-		.sort((a, b) => b.count - a.count);
+				.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+			const spaceDue = emptyDue();
+			for (const l of spaceLists) {
+				for (const k of ["done", "notDone", "open", "total"] as const) {
+					spaceDue[k] += l.due?.[k] ?? 0;
+				}
+			}
+			return {
+				id,
+				name: spaceNames.get(id) ?? "Unknown",
+				count: perSpaceInRange.get(id) ?? 0,
+				due: dueOf(spaceDue),
+				lists: spaceLists,
+			};
+		})
+		.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
 	return {
 		today,

@@ -90,8 +90,8 @@ function OverviewPage() {
 					label="Open tasks"
 					value={kpis.open.toLocaleString()}
 					detail={
-						kpis.dueToday
-							? `${plural(kpis.dueToday, "task")} due today`
+						kpis.dueToday.total
+							? `${kpis.dueToday.done} of ${plural(kpis.dueToday.total, "task")} due today done`
 							: "Nothing due today"
 					}
 				/>
