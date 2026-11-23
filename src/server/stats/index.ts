@@ -9,7 +9,7 @@ import { RANGE_KEYS } from "./ranges";
 
 export const overviewInput = z.object({
 	// Unknown values (old or mistyped links) fall back to the default.
-	range: z.enum(RANGE_KEYS).default("30d").catch("30d"),
+	range: z.enum(RANGE_KEYS).default("today").catch("today"),
 	space: z.string().optional(),
 });
 export type OverviewInput = z.infer<typeof overviewInput>;
