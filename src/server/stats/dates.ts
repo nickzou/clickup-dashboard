@@ -12,8 +12,6 @@ function formatter(timeZone: string) {
 			year: "numeric",
 			month: "2-digit",
 			day: "2-digit",
-			hour: "2-digit",
-			hourCycle: "h23",
 		});
 		formatters.set(timeZone, f);
 	}
@@ -31,11 +29,6 @@ function parts(ms: number, timeZone: string) {
 export function dayKey(ms: number, timeZone: string): string {
 	const p = parts(ms, timeZone);
 	return `${p.year}-${p.month}-${p.day}`;
-}
-
-// Local hour of day, 0-23.
-export function hourOf(ms: number, timeZone: string): number {
-	return Number(parts(ms, timeZone).hour);
 }
 
 function toUtc(key: string): Date {
@@ -56,6 +49,15 @@ const weekdayFormat = new Intl.DateTimeFormat("en", {
 
 export function weekdayName(key: string): string {
 	return weekdayFormat.format(toUtc(key));
+}
+
+const weekdayShortFormat = new Intl.DateTimeFormat("en", {
+	weekday: "short",
+	timeZone: "UTC",
+});
+
+export function weekdayShort(key: string): string {
+	return weekdayShortFormat.format(toUtc(key));
 }
 
 // Sunday of the key's week.

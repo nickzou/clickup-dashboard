@@ -35,6 +35,13 @@ function OverviewPage() {
 	const { data } = useSuspenseQuery(overviewQuery(search));
 	const { kpis } = data;
 	const range = RANGES[search.range];
+	const bySpace = data.bySpace.length ? (
+		<SpaceBreakdown rows={data.bySpace} />
+	) : (
+		<p className="text-sm text-muted-foreground">
+			Nothing completed in this range.
+		</p>
+	);
 
 	const filters = (
 		<OverviewFilters
@@ -106,13 +113,17 @@ function OverviewPage() {
 					<CardHeader>
 						<CardTitle>Completions</CardTitle>
 						<CardDescription>
-							{data.bucket === "hour"
-								? "Tasks completed each hour today"
+							{data.bucket === "space"
+								? "Completed today, by space"
 								: `Tasks completed per ${data.bucket} over ${range.text}`}
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
-						<CompletionsChart data={data.series} bucket={data.bucket} />
+						{data.bucket === "space" ? (
+							bySpace
+						) : (
+							<CompletionsChart data={data.series} bucket={data.bucket} />
+						)}
 					</CardContent>
 				</Card>
 				<Card>
@@ -131,7 +142,14 @@ function OverviewPage() {
 			</div>
 
 			<div className="grid gap-4 md:gap-6 xl:grid-cols-3">
-				<Card className="min-w-0 xl:col-span-2">
+				{/* On Today the Completions card already shows the space breakdown. */}
+				<Card
+					className={
+						data.bucket === "space"
+							? "min-w-0 xl:col-span-3"
+							: "min-w-0 xl:col-span-2"
+					}
+				>
 					<CardHeader>
 						<CardTitle>Activity</CardTitle>
 						<CardDescription>
@@ -142,25 +160,15 @@ function OverviewPage() {
 						<Heatmap days={data.heatmap} />
 					</CardContent>
 				</Card>
-				<Card>
-					<CardHeader>
-						<CardTitle>By space</CardTitle>
-						<CardDescription>
-							{search.range === "today"
-								? "Completed today"
-								: `Completed over ${range.text}`}
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						{data.bySpace.length ? (
-							<SpaceBreakdown rows={data.bySpace} />
-						) : (
-							<p className="text-sm text-muted-foreground">
-								Nothing completed in this range.
-							</p>
-						)}
-					</CardContent>
-				</Card>
+				{data.bucket !== "space" && (
+					<Card>
+						<CardHeader>
+							<CardTitle>By space</CardTitle>
+							<CardDescription>Completed over {range.text}</CardDescription>
+						</CardHeader>
+						<CardContent>{bySpace}</CardContent>
+					</Card>
+				)}
 			</div>
 		</div>
 	);

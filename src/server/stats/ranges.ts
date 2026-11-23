@@ -1,6 +1,6 @@
 // Shared by the server stats and the UI (labels, search-param validation), so
 // it must stay free of server-only imports.
-import { addDays, weekdayName, weekStart } from "./dates";
+import { addDays, weekdayName, weekdayShort, weekStart } from "./dates";
 
 export type RangeDef = {
 	label: string;
@@ -8,12 +8,10 @@ export type RangeDef = {
 	text: string;
 	// "vs {prevText}" under the Completed tile, given today's key
 	prevText: string | ((today: string) => string);
-	bucket: "hour" | "day" | "week";
+	// The Completions chart: by space (today), per day, or per week.
+	bucket: "space" | "day" | "week";
 	// First day of the range and the comparison period, given today's key.
 	bounds: (today: string) => { from: string; prevFrom: string; prevTo: string };
-	// When set, the comparison period also stops at this many days before the
-	// current moment, so a partial period is matched to the same time of day.
-	prevCutoffDays?: number;
 };
 
 // The last `n` days including today, compared with the `n` days before.
@@ -30,18 +28,22 @@ export const RANGES = {
 		label: "Today",
 		text: "today",
 		prevText: (today) => `last ${weekdayName(today)}`,
-		bucket: "hour",
+		bucket: "space",
 		bounds: (today) => {
 			const prev = addDays(today, -7);
 			return { from: today, prevFrom: prev, prevTo: prev };
 		},
 	},
-	// Sunday to now, compared with last Sunday up to the same weekday and
-	// time: a whole previous week would always look ahead.
+	// Sunday to now, compared with last Sunday through the same weekday: a
+	// whole previous week would always look ahead. Whole days, not times of
+	// day, since tasks are often ticked off later than they're done.
 	week: {
 		label: "This week",
 		text: "this week",
-		prevText: "this point last week",
+		prevText: (today) => {
+			const day = weekdayShort(today);
+			return day === "Sun" ? "last Sunday" : `last Sun–${day}`;
+		},
 		bucket: "day",
 		bounds: (today) => {
 			const from = weekStart(today);
@@ -51,7 +53,6 @@ export const RANGES = {
 				prevTo: addDays(today, -7),
 			};
 		},
-		prevCutoffDays: 7,
 	},
 	"7d": {
 		label: "7 days",

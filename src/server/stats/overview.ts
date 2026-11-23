@@ -1,14 +1,13 @@
 import "@tanstack/react-start/server-only";
 import { and, asc, eq, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { spaces, tasks } from "../db/schema";
-import { addDays, dayKey, dayRange, hourOf, weekStart } from "./dates";
+import { lists, spaces, tasks } from "../db/schema";
+import { addDays, dayKey, dayRange, weekStart } from "./dates";
 import { bridgesStreak, outcomeOf, POINTS } from "./outcomes";
 import { RANGES, type RangeDef, type RangeKey } from "./ranges";
 
 const DONE_TYPES = ["done", "closed"];
 const HEATMAP_WEEKS = 53;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 // When a task was marked complete: when it entered a done status, else when
 // it closed.
@@ -18,19 +17,11 @@ const markedDoneAt = sql<number>`coalesce(${tasks.dateDone}, ${tasks.dateClosed}
 // work happened before being ticked off, sometimes days later, so a due date
 // earlier than the day it was marked done wins. A later due date doesn't:
 // work finished early can't count on a day that hasn't happened.
-// Returns the day key and an instant within it (the real tick-off time when
-// it's the same day, else the due timestamp).
-function completionDay(
-	markedAt: number,
-	due: number | null,
-	tz: string,
-): { key: string; at: number; backfilled: boolean } {
+function completionDay(markedAt: number, due: number | null, tz: string) {
 	const markedKey = dayKey(markedAt, tz);
-	if (due !== null) {
-		const dueKey = dayKey(due, tz);
-		if (dueKey < markedKey) return { key: dueKey, at: due, backfilled: true };
-	}
-	return { key: markedKey, at: markedAt, backfilled: false };
+	if (due === null) return markedKey;
+	const dueKey = dayKey(due, tz);
+	return dueKey < markedKey ? dueKey : markedKey;
 }
 
 export function getOverviewStats(
@@ -42,10 +33,6 @@ export function getOverviewStats(
 	const today = dayKey(now, tz);
 	const def: RangeDef = RANGES[range];
 	const { from, prevFrom, prevTo } = def.bounds(today);
-	const prevCutoff =
-		def.prevCutoffDays === undefined
-			? Number.POSITIVE_INFINITY
-			: now - def.prevCutoffDays * DAY_MS;
 	const { bucket } = def;
 
 	const scope = and(
@@ -61,6 +48,7 @@ export function getOverviewStats(
 			markedAt: markedDoneAt,
 			due: tasks.dueDate,
 			spaceId: tasks.spaceId,
+			listId: tasks.listId,
 			status: tasks.status,
 			statusType: tasks.statusType,
 		})
@@ -70,7 +58,7 @@ export function getOverviewStats(
 	// Points per day: 1 per completed task, ½ per partial (see outcomes.ts).
 	const perDay = new Map<string, number>();
 	const perSpaceInRange = new Map<string, number>();
-	const perHourToday = new Array<number>(24).fill(0);
+	const perListInRange = new Map<string, { spaceId: string; points: number }>();
 	// Days with a skipped task, which keep a streak alive.
 	const bridgeDays = new Set<string>();
 	let completedPrev = 0;
@@ -81,7 +69,7 @@ export function getOverviewStats(
 	for (const c of completions) {
 		const outcome = outcomeOf(c.status, c.statusType);
 		if (!outcome) continue;
-		const { key, at, backfilled } = completionDay(c.markedAt, c.due, tz);
+		const key = completionDay(c.markedAt, c.due, tz);
 		const inRange = key >= from && key <= today;
 		if (inRange) outcomes[outcome]++;
 		if (outcome === "excluded") {
@@ -98,11 +86,12 @@ export function getOverviewStats(
 				c.spaceId,
 				(perSpaceInRange.get(c.spaceId) ?? 0) + points,
 			);
-		} else if (key >= prevFrom && key <= prevTo && at <= prevCutoff) {
+			const list = perListInRange.get(c.listId);
+			if (list) list.points += points;
+			else perListInRange.set(c.listId, { spaceId: c.spaceId, points });
+		} else if (key >= prevFrom && key <= prevTo) {
 			completedPrev += points;
 		}
-		// Backfilled tasks only have a placeholder time; hours use tick-offs.
-		if (key === today && !backfilled) perHourToday[hourOf(at, tz)] += points;
 	}
 
 	const rangeDays = dayRange(from, today);
@@ -110,21 +99,13 @@ export function getOverviewStats(
 	const completionRate =
 		resolvedInRange > 0 ? completed / resolvedInRange : null;
 
-	// Hourly for today, daily up to 90 days, weekly beyond. `date` is a day
-	// key, or "YYYY-MM-DDTHH" for hours.
+	// Daily up to 90 days, weekly beyond. Today has no series: its chart is
+	// the by-space breakdown.
 	const series: { date: string; count: number }[] = [];
-	if (bucket === "hour") {
-		const hoursSoFar = hourOf(now, tz) + 1;
-		for (let h = 0; h < hoursSoFar; h++) {
-			series.push({
-				date: `${today}T${String(h).padStart(2, "0")}`,
-				count: perHourToday[h],
-			});
-		}
-	} else if (bucket === "day") {
+	if (bucket === "day") {
 		for (const k of rangeDays)
 			series.push({ date: k, count: perDay.get(k) ?? 0 });
-	} else {
+	} else if (bucket === "week") {
 		const weeks = new Map<string, number>();
 		for (const k of rangeDays) {
 			const w = weekStart(k);
@@ -162,11 +143,26 @@ export function getOverviewStats(
 			.all()
 			.map((s) => [s.id, s.name]),
 	);
+	const listNames = new Map(
+		db
+			.select({ id: lists.id, name: lists.name })
+			.from(lists)
+			.all()
+			.map((l) => [l.id, l.name]),
+	);
 	const bySpace = [...perSpaceInRange]
 		.map(([id, count]) => ({
 			id,
 			name: spaceNames.get(id) ?? "Unknown",
 			count,
+			lists: [...perListInRange]
+				.filter(([, l]) => l.spaceId === id)
+				.map(([listId, l]) => ({
+					id: listId,
+					name: listNames.get(listId) ?? "Unknown list",
+					count: l.points,
+				}))
+				.sort((a, b) => b.count - a.count),
 		}))
 		.sort((a, b) => b.count - a.count);
 
