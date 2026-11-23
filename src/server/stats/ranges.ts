@@ -1,13 +1,13 @@
 // Shared by the server stats and the UI (labels, search-param validation), so
 // it must stay free of server-only imports.
-import { addDays, weekStart } from "./dates";
+import { addDays, weekdayName, weekStart } from "./dates";
 
 type RangeDef = {
 	label: string;
 	// "over {text}" in chart descriptions
 	text: string;
-	// "vs {prevText}" under the Completed tile
-	prevText: string;
+	// "vs {prevText}" under the Completed tile, given today's key
+	prevText: string | ((today: string) => string);
 	bucket: "hour" | "day" | "week";
 	// First day of the range and the comparison period, given today's key.
 	bounds: (today: string) => { from: string; prevFrom: string; prevTo: string };
@@ -20,14 +20,16 @@ const lastDays = (n: number) => (today: string) => {
 };
 
 export const RANGES = {
-	// Partial periods are compared with the whole previous one.
+	// Partial periods are compared with the whole previous one. Today is
+	// compared with the same weekday last week, since days of the week differ
+	// more than consecutive days do.
 	today: {
 		label: "Today",
 		text: "today",
-		prevText: "yesterday",
+		prevText: (today) => `last ${weekdayName(today)}`,
 		bucket: "hour",
 		bounds: (today) => {
-			const prev = addDays(today, -1);
+			const prev = addDays(today, -7);
 			return { from: today, prevFrom: prev, prevTo: prev };
 		},
 	},
@@ -72,4 +74,9 @@ export const RANGES = {
 } satisfies Record<string, RangeDef>;
 
 export type RangeKey = keyof typeof RANGES;
+
+export function comparisonLabel(range: RangeKey, today: string): string {
+	const { prevText } = RANGES[range] as RangeDef;
+	return typeof prevText === "function" ? prevText(today) : prevText;
+}
 export const RANGE_KEYS = Object.keys(RANGES) as [RangeKey, ...RangeKey[]];

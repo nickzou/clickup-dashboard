@@ -49,6 +49,15 @@ export function addDays(key: string, days: number): string {
 	return d.toISOString().slice(0, 10);
 }
 
+const weekdayFormat = new Intl.DateTimeFormat("en", {
+	weekday: "long",
+	timeZone: "UTC",
+});
+
+export function weekdayName(key: string): string {
+	return weekdayFormat.format(toUtc(key));
+}
+
 // Sunday of the key's week.
 export function weekStart(key: string): string {
 	return addDays(key, -toUtc(key).getUTCDay());

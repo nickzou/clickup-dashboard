@@ -17,7 +17,7 @@ import {
 import { Skeleton } from "#/components/ui/skeleton";
 import { plural } from "#/lib/format";
 import { overviewInput, overviewQuery } from "#/server/stats";
-import { RANGES } from "#/server/stats/ranges";
+import { comparisonLabel, RANGES } from "#/server/stats/ranges";
 
 export const Route = createFileRoute("/_authed/")({
 	validateSearch: overviewInput,
@@ -70,7 +70,7 @@ function OverviewPage() {
 					delta={{
 						current: kpis.completed,
 						previous: kpis.completedPrev,
-						label: range.prevText,
+						label: comparisonLabel(search.range, data.today),
 					}}
 				/>
 				<KpiTile
