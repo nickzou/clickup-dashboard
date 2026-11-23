@@ -6,6 +6,8 @@ type Due = {
 	putOff: number;
 	open: number;
 	total: number;
+	// Waiting on someone else: noted, never part of the count.
+	waiting: number;
 };
 
 type Row = {
@@ -44,8 +46,9 @@ export function SpaceBreakdown({ rows }: { rows: (Row & { lists: Row[] })[] }) {
 						putOff: acc.putOff + (r.due?.putOff ?? 0),
 						open: acc.open + (r.due?.open ?? 0),
 						total: acc.total + (r.due?.total ?? 0),
+						waiting: acc.waiting + (r.due?.waiting ?? 0),
 					}),
-					{ done: 0, notDone: 0, putOff: 0, open: 0, total: 0 },
+					{ done: 0, notDone: 0, putOff: 0, open: 0, total: 0, waiting: 0 },
 				),
 			}
 		: null;
@@ -127,6 +130,7 @@ function BarRow({
 							{row.due.total > 0
 								? `${row.due.done}/${row.due.total} due`
 								: "nothing due today"}
+							{row.due.waiting > 0 && ` · ${row.due.waiting} waiting`}
 						</span>
 					)}
 					<span className="font-medium tabular-nums">

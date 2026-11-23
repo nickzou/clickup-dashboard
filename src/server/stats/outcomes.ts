@@ -46,6 +46,20 @@ const STREAK_BRIDGES = new Set([
 	"social skipped",
 ]);
 
+// Open statuses where the next step is someone else's: waiting on feedback,
+// a delivery, a blocker. Moving these isn't putting them off, and they don't
+// count toward what's due today.
+const WAITING = new Set([
+	"waiting for feedback",
+	"watching",
+	"roadblocked",
+	"scheduled for delivery",
+]);
+
+export function isWaiting(status: string): boolean {
+	return WAITING.has(status.toLowerCase());
+}
+
 export const POINTS: Record<Outcome, number> = {
 	completed: 1,
 	partial: 0.5,

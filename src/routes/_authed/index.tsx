@@ -8,6 +8,7 @@ import { Heatmap } from "#/components/overview/heatmap";
 import { KpiTile } from "#/components/overview/kpi-tile";
 import { OutcomeBreakdown } from "#/components/overview/outcome-breakdown";
 import { SpaceBreakdown } from "#/components/overview/space-breakdown";
+import { WaitingList } from "#/components/overview/waiting-list";
 import {
 	Card,
 	CardContent,
@@ -89,7 +90,7 @@ function OverviewPage() {
 				<KpiTile
 					label="Overdue"
 					value={kpis.overdue.toLocaleString()}
-					detail="Open and past their due date"
+					detail="Open, past due, not waiting on others"
 					tone={kpis.overdue > 0 ? "critical" : undefined}
 				/>
 				<KpiTile
@@ -117,19 +118,39 @@ function OverviewPage() {
 						)}
 					</CardContent>
 				</Card>
-				<Card>
-					<CardHeader>
-						<CardTitle>Outcomes</CardTitle>
-						<CardDescription>
-							{search.range === "today"
-								? "How today's finished tasks resolved"
-								: `How finished tasks resolved over ${range.text}`}
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<OutcomeBreakdown counts={data.outcomes} />
-					</CardContent>
-				</Card>
+				<div className="grid min-w-0 grid-cols-1 content-start gap-4 md:gap-6">
+					<Card>
+						<CardHeader>
+							<CardTitle>Outcomes</CardTitle>
+							<CardDescription>
+								{search.range === "today"
+									? "How today's finished tasks resolved"
+									: `How finished tasks resolved over ${range.text}`}
+							</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<OutcomeBreakdown counts={data.outcomes} />
+						</CardContent>
+					</Card>
+					<Card>
+						<CardHeader>
+							<CardTitle>
+								Waiting on others
+								{data.waiting.length > 0 && (
+									<span className="ml-2 font-normal text-muted-foreground tabular-nums">
+										{data.waiting.length}
+									</span>
+								)}
+							</CardTitle>
+							<CardDescription>
+								Right now · not counted in any score
+							</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<WaitingList tasks={data.waiting} today={data.today} />
+						</CardContent>
+					</Card>
+				</div>
 			</div>
 
 			<div className="grid grid-cols-1 items-start gap-4 md:gap-6 xl:grid-cols-3">

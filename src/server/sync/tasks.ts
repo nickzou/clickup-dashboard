@@ -3,7 +3,7 @@ import { and, eq, inArray, isNull, lt } from "drizzle-orm";
 import type { ClickUpClient } from "../clickup/client";
 import { type ClickUpTask, task, tasksResponse } from "../clickup/schemas";
 import type { Db } from "../db/client";
-import { taskDueChanges, tasks } from "../db/schema";
+import { taskDueChanges, taskStatusChanges, tasks } from "../db/schema";
 
 type Options = {
 	meId: number;
@@ -76,9 +76,9 @@ const MAX_DELETE_CHECKS = 200;
 
 function writePage(db: Db, page: ClickUpTask[], meId: number, now: number) {
 	db.transaction((tx) => {
-		const previousDue = new Map(
+		const previous = new Map(
 			tx
-				.select({ id: tasks.id, dueDate: tasks.dueDate })
+				.select({ id: tasks.id, dueDate: tasks.dueDate, status: tasks.status })
 				.from(tasks)
 				.where(
 					inArray(
@@ -87,17 +87,29 @@ function writePage(db: Db, page: ClickUpTask[], meId: number, now: number) {
 					),
 				)
 				.all()
-				.map((r) => [r.id, r.dueDate]),
+				.map((r) => [r.id, r]),
 		);
 
 		for (const t of page) {
 			const row = toRow(t, meId, now);
-			if (previousDue.has(t.id) && previousDue.get(t.id) !== row.dueDate) {
+			const before = previous.get(t.id);
+			if (before && before.dueDate !== row.dueDate) {
 				tx.insert(taskDueChanges)
 					.values({
 						taskId: t.id,
-						oldDueDate: previousDue.get(t.id) ?? null,
+						oldDueDate: before.dueDate,
 						newDueDate: row.dueDate,
+						status: row.status,
+						seenAt: now,
+					})
+					.run();
+			}
+			if (before && before.status !== row.status) {
+				tx.insert(taskStatusChanges)
+					.values({
+						taskId: t.id,
+						oldStatus: before.status,
+						newStatus: row.status,
 						seenAt: now,
 					})
 					.run();

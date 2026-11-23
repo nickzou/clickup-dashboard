@@ -4,6 +4,7 @@ import {
 	asc,
 	eq,
 	gte,
+	inArray,
 	isNotNull,
 	isNull,
 	lte,
@@ -11,9 +12,15 @@ import {
 	sql,
 } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { lists, spaces, taskDueChanges, tasks } from "../db/schema";
+import {
+	lists,
+	spaces,
+	taskDueChanges,
+	taskStatusChanges,
+	tasks,
+} from "../db/schema";
 import { addDays, dayKey, dayRange, weekStart } from "./dates";
-import { bridgesStreak, outcomeOf, POINTS } from "./outcomes";
+import { bridgesStreak, isWaiting, outcomeOf, POINTS } from "./outcomes";
 import { RANGES, type RangeDef, type RangeKey } from "./ranges";
 
 const DONE_TYPES = ["done", "closed"];
@@ -34,21 +41,31 @@ const emptyOutcomeCounts = (): OutcomeCounts => ({
 });
 
 // Tasks due today by state, including ones put off to a later day. Excluded
-// outcomes aren't counted at all.
+// outcomes and tasks waiting on someone else aren't counted at all.
+// Waiting tasks are noted beside the count, never part of it.
 type Due = {
 	done: number;
 	notDone: number;
 	putOff: number;
 	open: number;
 	total: number;
+	waiting: number;
 };
-const DUE_KEYS = ["done", "notDone", "putOff", "open", "total"] as const;
+const DUE_KEYS = [
+	"done",
+	"notDone",
+	"putOff",
+	"open",
+	"total",
+	"waiting",
+] as const;
 const emptyDue = (): Due => ({
 	done: 0,
 	notDone: 0,
 	putOff: 0,
 	open: 0,
 	total: 0,
+	waiting: 0,
 });
 
 // When a task was marked complete: when it entered a done status, else when
@@ -194,12 +211,23 @@ export function getOverviewStats(
 	}));
 
 	const open = db
-		.select({ due: tasks.dueDate })
+		.select({
+			id: tasks.id,
+			name: tasks.name,
+			url: tasks.url,
+			status: tasks.status,
+			statusColor: tasks.statusColor,
+			listId: tasks.listId,
+			due: tasks.dueDate,
+			updated: tasks.dateUpdated,
+		})
 		.from(tasks)
 		.where(and(scope, notInArray(tasks.statusType, DONE_TYPES)))
 		.all();
+	// Waiting on someone else isn't overdue work; the Waiting card tracks it.
 	let overdue = 0;
 	for (const t of open) {
+		if (isWaiting(t.status)) continue;
 		if (t.due !== null && dayKey(t.due, tz) < today) overdue++;
 	}
 
@@ -229,21 +257,26 @@ export function getOverviewStats(
 		if (t.due === null || dayKey(t.due, tz) !== today) continue;
 		const outcome = outcomeOf(t.status, t.statusType);
 		if (outcome === "excluded") continue;
+		const list = dueTodayByList.get(t.listId) ?? {
+			...emptyDue(),
+			spaceId: t.spaceId,
+		};
+		dueTodayByList.set(t.listId, list);
+		if (isWaiting(t.status)) {
+			dueToday.waiting++;
+			list.waiting++;
+			continue;
+		}
 		const bucket =
 			outcome === "completed" || outcome === "partial"
 				? "done"
 				: outcome === "notDone"
 					? "notDone"
 					: "open";
-		const list = dueTodayByList.get(t.listId) ?? {
-			...emptyDue(),
-			spaceId: t.spaceId,
-		};
 		for (const d of [dueToday, list]) {
 			d[bucket]++;
 			d.total++;
 		}
-		dueTodayByList.set(t.listId, list);
 	}
 	// Put off today: no longer due today, but still part of today's plan.
 	for (const p of putOffs) {
@@ -289,8 +322,8 @@ export function getOverviewStats(
 		perListInRange.get(listId)?.spaceId ?? dueTodayByList.get(listId)?.spaceId;
 	const dueOf = (d?: Due): Due | undefined => {
 		if (!showDue) return undefined;
-		const { done, notDone, putOff, open, total } = d ?? emptyDue();
-		return { done, notDone, putOff, open, total };
+		const { done, notDone, putOff, open, total, waiting } = d ?? emptyDue();
+		return { done, notDone, putOff, open, total, waiting };
 	};
 
 	const bySpace = [...spaceIds]
@@ -337,11 +370,73 @@ export function getOverviewStats(
 		outcomes,
 		heatmap,
 		bySpace,
+		waiting: waitingTasks(db, open, listNames, tz),
 		spaces: [...spaceNames].map(([id, name]) => ({ id, name })),
 	};
 }
 
 export type OverviewStats = ReturnType<typeof getOverviewStats>;
+
+// Open tasks waiting on someone else, soonest check-in (due date) first.
+// Waiting since the last recorded move into the current status; for tasks
+// already waiting before status changes were recorded, since their last
+// update, which is a lower bound.
+function waitingTasks(
+	db: Db,
+	open: {
+		id: string;
+		name: string;
+		url: string;
+		status: string;
+		statusColor: string | null;
+		listId: string;
+		due: number | null;
+		updated: number;
+	}[],
+	listNames: Map<string, string>,
+	tz: string,
+) {
+	const waiting = open.filter((t) => isWaiting(t.status));
+	const entered = new Map<string, number>();
+	if (waiting.length) {
+		const changes = db
+			.select({
+				taskId: taskStatusChanges.taskId,
+				newStatus: taskStatusChanges.newStatus,
+				seenAt: taskStatusChanges.seenAt,
+			})
+			.from(taskStatusChanges)
+			.where(
+				inArray(
+					taskStatusChanges.taskId,
+					waiting.map((t) => t.id),
+				),
+			)
+			.all();
+		const current = new Map(waiting.map((t) => [t.id, t.status]));
+		for (const c of changes) {
+			if (c.newStatus !== current.get(c.taskId)) continue;
+			entered.set(c.taskId, Math.max(entered.get(c.taskId) ?? 0, c.seenAt));
+		}
+	}
+	return waiting
+		.map((t) => ({
+			id: t.id,
+			name: t.name,
+			url: t.url,
+			status: t.status,
+			statusColor: t.statusColor,
+			list: listNames.get(t.listId) ?? "Unknown list",
+			since: dayKey(entered.get(t.id) ?? t.updated, tz),
+			sinceExact: entered.has(t.id),
+			checkIn: t.due === null ? null : dayKey(t.due, tz),
+		}))
+		.sort(
+			(a, b) =>
+				(a.checkIn ?? "9999").localeCompare(b.checkIn ?? "9999") ||
+				a.since.localeCompare(b.since),
+		);
+}
 
 // A task put off: moved from its due day to a later one, on or after that
 // day, without being finished. One per task and due day, however many moves.
@@ -350,6 +445,7 @@ export type OverviewStats = ReturnType<typeof getOverviewStats>;
 // - tasks created the day they were moved, like a "partially completed"
 //   task's copy, which may start on the original's date
 // - tasks moved back and finished on the original due day anyway
+// - tasks waiting on someone else when moved (see isWaiting)
 // Due-date changes are only known from when the sync started recording them.
 function putOffEvents(db: Db, scope: ReturnType<typeof and>, tz: string) {
 	const rows = db
@@ -358,6 +454,7 @@ function putOffEvents(db: Db, scope: ReturnType<typeof and>, tz: string) {
 			oldDue: taskDueChanges.oldDueDate,
 			newDue: taskDueChanges.newDueDate,
 			seenAt: taskDueChanges.seenAt,
+			statusThen: taskDueChanges.status,
 			created: tasks.dateCreated,
 			markedAt: markedDoneAt,
 			due: tasks.dueDate,
@@ -387,6 +484,7 @@ function putOffEvents(db: Db, scope: ReturnType<typeof and>, tz: string) {
 		const movedOn = dayKey(r.seenAt, tz);
 		if (dayKey(r.newDue, tz) <= day || movedOn < day) continue;
 		if (dayKey(r.created, tz) === movedOn) continue;
+		if (isWaiting(r.statusThen ?? r.status)) continue;
 		if (
 			r.markedAt !== null &&
 			outcomeOf(r.status, r.statusType) &&

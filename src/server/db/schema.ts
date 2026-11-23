@@ -86,9 +86,24 @@ export const taskDueChanges = sqliteTable(
 		taskId: text().notNull(),
 		oldDueDate: integer(),
 		newDueDate: integer(),
+		// The task's status when the change was seen. Null on older rows.
+		status: text(),
 		seenAt: integer().notNull(),
 	},
 	(t) => [index("task_due_changes_task_idx").on(t.taskId)],
+);
+
+// Status changes, recorded the same way: from the first sync that sees them.
+export const taskStatusChanges = sqliteTable(
+	"task_status_changes",
+	{
+		id: integer().primaryKey({ autoIncrement: true }),
+		taskId: text().notNull(),
+		oldStatus: text().notNull(),
+		newStatus: text().notNull(),
+		seenAt: integer().notNull(),
+	},
+	(t) => [index("task_status_changes_task_idx").on(t.taskId)],
 );
 
 export const timeEntries = sqliteTable(
