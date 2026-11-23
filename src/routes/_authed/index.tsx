@@ -89,11 +89,7 @@ function OverviewPage() {
 				<KpiTile
 					label="Overdue"
 					value={kpis.overdue.toLocaleString()}
-					detail={
-						kpis.dueToday.total
-							? `${kpis.dueToday.done} of ${plural(kpis.dueToday.total, "task")} due today done`
-							: "Nothing due today"
-					}
+					detail="Open and past their due date"
 					tone={kpis.overdue > 0 ? "critical" : undefined}
 				/>
 				<KpiTile

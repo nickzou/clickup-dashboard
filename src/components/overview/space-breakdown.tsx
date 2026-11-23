@@ -24,9 +24,31 @@ const DUE_PARTS = [
 export function SpaceBreakdown({ rows }: { rows: (Row & { lists: Row[] })[] }) {
 	const progress = rows.some((r) => r.due);
 	const max = Math.max(1, ...rows.map((r) => r.count));
+	// On Today, a total row sums every space so the day's size reads at once.
+	const total: Row | null = progress
+		? {
+				id: "total",
+				name: "All tasks",
+				count: rows.reduce((n, r) => n + r.count, 0),
+				due: rows.reduce<Due>(
+					(acc, r) => ({
+						done: acc.done + (r.due?.done ?? 0),
+						notDone: acc.notDone + (r.due?.notDone ?? 0),
+						open: acc.open + (r.due?.open ?? 0),
+						total: acc.total + (r.due?.total ?? 0),
+					}),
+					{ done: 0, notDone: 0, open: 0, total: 0 },
+				),
+			}
+		: null;
 	return (
 		<div className="grid grid-cols-1 gap-4">
 			{progress && <Legend />}
+			{total && (
+				<div className="border-b pb-4 font-semibold">
+					<BarRow row={total} max={max} />
+				</div>
+			)}
 			<ul className="grid grid-cols-1 gap-4">
 				{rows.map((space) => (
 					<li key={space.id} className="grid grid-cols-1 gap-2">
