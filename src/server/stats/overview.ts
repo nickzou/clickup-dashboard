@@ -9,8 +9,28 @@ const DONE_TYPES = ["done", "closed"];
 const HEATMAP_WEEKS = 53;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// A task's completion time: when it entered a done status, else when it closed.
-const completedAt = sql<number>`coalesce(${tasks.dateDone}, ${tasks.dateClosed})`;
+// When a task was marked complete: when it entered a done status, else when
+// it closed.
+const markedDoneAt = sql<number>`coalesce(${tasks.dateDone}, ${tasks.dateClosed})`;
+
+// The day a task counts as completed. Tasks are rescheduled to the day the
+// work happened before being ticked off, sometimes days later, so a due date
+// earlier than the day it was marked done wins. A later due date doesn't:
+// work finished early can't count on a day that hasn't happened.
+// Returns the day key and an instant within it (the real tick-off time when
+// it's the same day, else the due timestamp).
+function completionDay(
+	markedAt: number,
+	due: number | null,
+	tz: string,
+): { key: string; at: number; backfilled: boolean } {
+	const markedKey = dayKey(markedAt, tz);
+	if (due !== null) {
+		const dueKey = dayKey(due, tz);
+		if (dueKey < markedKey) return { key: dueKey, at: due, backfilled: true };
+	}
+	return { key: markedKey, at: markedAt, backfilled: false };
+}
 
 export function getOverviewStats(
 	db: Db,
@@ -36,23 +56,28 @@ export function getOverviewStats(
 	// Every completion, bucketed by local day. A few thousand rows: cheaper to
 	// bucket here than to teach SQLite about time zones.
 	const completions = db
-		.select({ at: completedAt, spaceId: tasks.spaceId })
+		.select({
+			markedAt: markedDoneAt,
+			due: tasks.dueDate,
+			spaceId: tasks.spaceId,
+		})
 		.from(tasks)
-		.where(and(scope, isNotNull(completedAt)))
+		.where(and(scope, isNotNull(markedDoneAt)))
 		.all();
 	const perDay = new Map<string, number>();
 	const perSpaceInRange = new Map<string, number>();
 	const perHourToday = new Array<number>(24).fill(0);
 	let completedPrev = 0;
 	for (const c of completions) {
-		const key = dayKey(c.at, tz);
+		const { key, at, backfilled } = completionDay(c.markedAt, c.due, tz);
 		perDay.set(key, (perDay.get(key) ?? 0) + 1);
 		if (key >= from && key <= today) {
 			perSpaceInRange.set(c.spaceId, (perSpaceInRange.get(c.spaceId) ?? 0) + 1);
-		} else if (key >= prevFrom && key <= prevTo && c.at <= prevCutoff) {
+		} else if (key >= prevFrom && key <= prevTo && at <= prevCutoff) {
 			completedPrev++;
 		}
-		if (key === today) perHourToday[hourOf(c.at, tz)]++;
+		// Backfilled tasks only have a placeholder time; hours use tick-offs.
+		if (key === today && !backfilled) perHourToday[hourOf(at, tz)]++;
 	}
 
 	const rangeDays = dayRange(from, today);
