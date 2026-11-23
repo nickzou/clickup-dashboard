@@ -52,7 +52,11 @@ class NotFound extends Error {}
 
 // Responses are parsed with zod schemas that list only the fields we keep, so
 // anything else (descriptions, emails, comments) is dropped at the boundary.
-export function createClickUpClient(token: string): ClickUpClient {
+// `signal` cancels the client: in-flight and later requests reject at once.
+export function createClickUpClient(
+	token: string,
+	signal?: AbortSignal,
+): ClickUpClient {
 	let requestCount = 0;
 
 	async function request<T extends z.ZodType>(
@@ -67,15 +71,19 @@ export function createClickUpClient(token: string): ClickUpClient {
 		}
 
 		for (let attempt = 0; ; attempt++) {
+			signal?.throwIfAborted();
 			await throttle();
+			signal?.throwIfAborted();
 			requestCount++;
 			let res: Response;
 			try {
+				const timeout = AbortSignal.timeout(30_000);
 				res = await fetch(url, {
 					headers: { Authorization: token },
-					signal: AbortSignal.timeout(30_000),
+					signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
 				});
 			} catch (err) {
+				if (signal?.aborted) throw err;
 				if (attempt < RETRY_DELAYS_MS.length) {
 					await sleep(RETRY_DELAYS_MS[attempt]);
 					continue;

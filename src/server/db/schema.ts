@@ -111,6 +111,9 @@ export const syncRuns = sqliteTable("sync_runs", {
 	status: text({ enum: ["running", "ok", "error"] }).notNull(),
 	startedAt: integer({ mode: "timestamp_ms" }).notNull(),
 	finishedAt: integer({ mode: "timestamp_ms" }),
+	// Refreshed while the run is in progress; a stale heartbeat means the
+	// process running it died.
+	heartbeatAt: integer({ mode: "timestamp_ms" }),
 	tasksUpserted: integer().notNull().default(0),
 	requests: integer().notNull().default(0),
 	error: text(),

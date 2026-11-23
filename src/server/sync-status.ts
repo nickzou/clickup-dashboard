@@ -1,11 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
-import { count, desc, isNull, ne, or } from "drizzle-orm";
+import { count, isNull } from "drizzle-orm";
 import { requireAuth } from "./auth";
 import { getDb } from "./db/client";
-import { syncRuns, tasks } from "./db/schema";
+import { tasks } from "./db/schema";
 import {
 	clearTokenRejected,
-	INTERRUPTED,
 	lastRun,
 	startSync,
 	syncState,
@@ -18,21 +17,8 @@ export const getSyncStatus = createServerFn({ method: "GET" })
 	.handler(() => {
 		const db = getDb();
 		const { running, tokenRejected } = syncState();
-		// A run cut short by a restart isn't a failure worth showing; the data
-		// from the last good run is still there.
-		const last = db
-			.select()
-			.from(syncRuns)
-			.where(
-				or(
-					ne(syncRuns.status, "error"),
-					isNull(syncRuns.error),
-					ne(syncRuns.error, INTERRUPTED),
-				),
-			)
-			.orderBy(desc(syncRuns.startedAt))
-			.limit(1)
-			.get();
+		// lastRun skips runs cut short by a restart: not a failure worth showing.
+		const last = lastRun(db);
 		const lastOk = lastRun(db, undefined, "ok");
 		const taskCount =
 			db.select({ n: count() }).from(tasks).where(isNull(tasks.deletedAt)).get()
