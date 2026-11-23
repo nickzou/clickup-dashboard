@@ -21,15 +21,17 @@ type Point = {
 	date: string;
 	completed: number;
 	partial: number;
+	putOff: number;
 	notDone: number;
 };
 
 // Bottom to top. Colors match the Outcomes card.
-const STACK = ["completed", "partial", "notDone"] as const;
+const STACK = ["completed", "partial", "putOff", "notDone"] as const;
 
 const config = {
 	completed: { label: "Completed", color: "var(--outcome-completed)" },
 	partial: { label: "Partial", color: "var(--outcome-partial)" },
+	putOff: { label: "Put off", color: "var(--outcome-put-off)" },
 	notDone: { label: "Not done", color: "var(--outcome-not-done)" },
 } satisfies ChartConfig;
 

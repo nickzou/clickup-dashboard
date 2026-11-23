@@ -16,6 +16,7 @@ const STATUS_OUTCOMES: Record<string, Outcome> = {
 
 	// Some of it happened.
 	"cut short": "partial",
+	"partially completed": "partial",
 
 	// Resolved without doing it: lowers the completion rate.
 	"did not complete": "notDone",

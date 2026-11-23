@@ -3,6 +3,7 @@ import { plural } from "#/lib/format";
 type Counts = {
 	completed: number;
 	partial: number;
+	putOff: number;
 	notDone: number;
 	excluded: number;
 };
@@ -24,6 +25,12 @@ const ROWS: {
 		label: "Partial",
 		hint: "½ point each",
 		color: "var(--outcome-partial)",
+	},
+	{
+		key: "putOff",
+		label: "Put off",
+		hint: "moved past its due day",
+		color: "var(--outcome-put-off)",
 	},
 	{
 		key: "notDone",

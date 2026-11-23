@@ -11,7 +11,7 @@ import {
 	sql,
 } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { lists, spaces, tasks } from "../db/schema";
+import { lists, spaces, taskDueChanges, tasks } from "../db/schema";
 import { addDays, dayKey, dayRange, weekStart } from "./dates";
 import { bridgesStreak, outcomeOf, POINTS } from "./outcomes";
 import { RANGES, type RangeDef, type RangeKey } from "./ranges";
@@ -20,16 +20,36 @@ const DONE_TYPES = ["done", "closed"];
 const HEATMAP_WEEKS = 53;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-type OutcomeCounts = { completed: number; partial: number; notDone: number };
+type OutcomeCounts = {
+	completed: number;
+	partial: number;
+	putOff: number;
+	notDone: number;
+};
 const emptyOutcomeCounts = (): OutcomeCounts => ({
 	completed: 0,
 	partial: 0,
+	putOff: 0,
 	notDone: 0,
 });
 
-// Tasks due today by state. Excluded outcomes aren't counted at all.
-type Due = { done: number; notDone: number; open: number; total: number };
-const emptyDue = (): Due => ({ done: 0, notDone: 0, open: 0, total: 0 });
+// Tasks due today by state, including ones put off to a later day. Excluded
+// outcomes aren't counted at all.
+type Due = {
+	done: number;
+	notDone: number;
+	putOff: number;
+	open: number;
+	total: number;
+};
+const DUE_KEYS = ["done", "notDone", "putOff", "open", "total"] as const;
+const emptyDue = (): Due => ({
+	done: 0,
+	notDone: 0,
+	putOff: 0,
+	open: 0,
+	total: 0,
+});
 
 // When a task was marked complete: when it entered a done status, else when
 // it closed.
@@ -87,7 +107,13 @@ export function getOverviewStats(
 	// Completed + partial + not done in range: the completion rate's base.
 	let resolvedInRange = 0;
 	// Finished tasks in range by outcome (task counts, not points).
-	const outcomes = { completed: 0, partial: 0, notDone: 0, excluded: 0 };
+	const outcomes = {
+		completed: 0,
+		partial: 0,
+		putOff: 0,
+		notDone: 0,
+		excluded: 0,
+	};
 	// Finished tasks per day by outcome, for the stacked Completions chart.
 	const perDayOutcome = new Map<string, OutcomeCounts>();
 	for (const c of completions) {
@@ -123,6 +149,18 @@ export function getOverviewStats(
 		}
 	}
 
+	// Put off: scores nothing and lowers the rate, like not done, on the day
+	// the task was due.
+	const putOffs = putOffEvents(db, scope, tz);
+	for (const p of putOffs) {
+		if (p.day < from || p.day > today) continue;
+		outcomes.putOff++;
+		resolvedInRange++;
+		const day = perDayOutcome.get(p.day) ?? emptyOutcomeCounts();
+		day.putOff++;
+		perDayOutcome.set(p.day, day);
+	}
+
 	const rangeDays = dayRange(from, today);
 	const completed = rangeDays.reduce((n, k) => n + (perDay.get(k) ?? 0), 0);
 	const completionRate =
@@ -140,6 +178,7 @@ export function getOverviewStats(
 			if (day) {
 				acc.completed += day.completed;
 				acc.partial += day.partial;
+				acc.putOff += day.putOff;
 				acc.notDone += day.notDone;
 			}
 			buckets.set(b, acc);
@@ -206,6 +245,19 @@ export function getOverviewStats(
 		}
 		dueTodayByList.set(t.listId, list);
 	}
+	// Put off today: no longer due today, but still part of today's plan.
+	for (const p of putOffs) {
+		if (p.day !== today) continue;
+		const list = dueTodayByList.get(p.listId) ?? {
+			...emptyDue(),
+			spaceId: p.spaceId,
+		};
+		for (const d of [dueToday, list]) {
+			d.putOff++;
+			d.total++;
+		}
+		dueTodayByList.set(p.listId, list);
+	}
 
 	const spaceNames = new Map(
 		db
@@ -237,8 +289,8 @@ export function getOverviewStats(
 		perListInRange.get(listId)?.spaceId ?? dueTodayByList.get(listId)?.spaceId;
 	const dueOf = (d?: Due): Due | undefined => {
 		if (!showDue) return undefined;
-		const { done, notDone, open, total } = d ?? emptyDue();
-		return { done, notDone, open, total };
+		const { done, notDone, putOff, open, total } = d ?? emptyDue();
+		return { done, notDone, putOff, open, total };
 	};
 
 	const bySpace = [...spaceIds]
@@ -254,7 +306,7 @@ export function getOverviewStats(
 				.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 			const spaceDue = emptyDue();
 			for (const l of spaceLists) {
-				for (const k of ["done", "notDone", "open", "total"] as const) {
+				for (const k of DUE_KEYS) {
 					spaceDue[k] += l.due?.[k] ?? 0;
 				}
 			}
@@ -290,6 +342,66 @@ export function getOverviewStats(
 }
 
 export type OverviewStats = ReturnType<typeof getOverviewStats>;
+
+// A task put off: moved from its due day to a later one, on or after that
+// day, without being finished. One per task and due day, however many moves.
+// Not counted:
+// - moves made before the due day (planning ahead), or earlier or within a day
+// - tasks created the day they were moved, like a "partially completed"
+//   task's copy, which may start on the original's date
+// - tasks moved back and finished on the original due day anyway
+// Due-date changes are only known from when the sync started recording them.
+function putOffEvents(db: Db, scope: ReturnType<typeof and>, tz: string) {
+	const rows = db
+		.select({
+			taskId: taskDueChanges.taskId,
+			oldDue: taskDueChanges.oldDueDate,
+			newDue: taskDueChanges.newDueDate,
+			seenAt: taskDueChanges.seenAt,
+			created: tasks.dateCreated,
+			markedAt: markedDoneAt,
+			due: tasks.dueDate,
+			status: tasks.status,
+			statusType: tasks.statusType,
+			spaceId: tasks.spaceId,
+			listId: tasks.listId,
+		})
+		.from(taskDueChanges)
+		.innerJoin(tasks, eq(tasks.id, taskDueChanges.taskId))
+		.where(
+			and(
+				scope,
+				isNotNull(taskDueChanges.oldDueDate),
+				isNotNull(taskDueChanges.newDueDate),
+			),
+		)
+		.all();
+
+	const events = new Map<
+		string,
+		{ day: string; spaceId: string; listId: string }
+	>();
+	for (const r of rows) {
+		if (r.oldDue === null || r.newDue === null) continue;
+		const day = dayKey(r.oldDue, tz);
+		const movedOn = dayKey(r.seenAt, tz);
+		if (dayKey(r.newDue, tz) <= day || movedOn < day) continue;
+		if (dayKey(r.created, tz) === movedOn) continue;
+		if (
+			r.markedAt !== null &&
+			outcomeOf(r.status, r.statusType) &&
+			completionDay(r.markedAt, r.due, tz) === day
+		) {
+			continue;
+		}
+		events.set(`${r.taskId}:${day}`, {
+			day,
+			spaceId: r.spaceId,
+			listId: r.listId,
+		});
+	}
+	return [...events.values()];
+}
 
 // A streak is consecutive days with points. A skipped day (illness,
 // vacation…) with no points bridges it: the streak survives but doesn't grow.

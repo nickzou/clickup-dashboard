@@ -1,6 +1,12 @@
 import { cn } from "#/lib/utils";
 
-type Due = { done: number; notDone: number; open: number; total: number };
+type Due = {
+	done: number;
+	notDone: number;
+	putOff: number;
+	open: number;
+	total: number;
+};
 
 type Row = {
 	id: string;
@@ -12,6 +18,7 @@ type Row = {
 
 const DUE_PARTS = [
 	{ key: "done", label: "Done", color: "var(--outcome-completed)" },
+	{ key: "putOff", label: "Put off", color: "var(--outcome-put-off)" },
 	{ key: "notDone", label: "Not done", color: "var(--outcome-not-done)" },
 ] as const;
 
@@ -34,10 +41,11 @@ export function SpaceBreakdown({ rows }: { rows: (Row & { lists: Row[] })[] }) {
 					(acc, r) => ({
 						done: acc.done + (r.due?.done ?? 0),
 						notDone: acc.notDone + (r.due?.notDone ?? 0),
+						putOff: acc.putOff + (r.due?.putOff ?? 0),
 						open: acc.open + (r.due?.open ?? 0),
 						total: acc.total + (r.due?.total ?? 0),
 					}),
-					{ done: 0, notDone: 0, open: 0, total: 0 },
+					{ done: 0, notDone: 0, putOff: 0, open: 0, total: 0 },
 				),
 			}
 		: null;
@@ -151,7 +159,7 @@ function ProgressBar({ due, height }: { due: Due; height: string }) {
 				"flex gap-0.5 overflow-hidden rounded-full bg-muted",
 			)}
 			role="img"
-			aria-label={`${due.done} done, ${due.notDone} not done, ${due.open} still open, of ${due.total} due today`}
+			aria-label={`${due.done} done, ${due.putOff} put off, ${due.notDone} not done, ${due.open} still open, of ${due.total} due today`}
 		>
 			{DUE_PARTS.map(
 				(p) =>

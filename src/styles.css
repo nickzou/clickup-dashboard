@@ -34,6 +34,7 @@
   --heat-4: #104281;
   --outcome-completed: #2a78d6;
   --outcome-partial: #1baf7a;
+  --outcome-put-off: #9b5de5;
   --outcome-not-done: #eb6834;
   --outcome-excluded: oklch(0.87 0.005 286);
   --chart-2: oklch(0.6 0.118 184.704);
@@ -79,6 +80,7 @@
   --heat-4: #9ec5f4;
   --outcome-completed: #3987e5;
   --outcome-partial: #199e70;
+  --outcome-put-off: #a36ef0;
   --outcome-not-done: #d95926;
   --outcome-excluded: oklch(0.37 0.005 286);
   --chart-2: oklch(0.696 0.17 162.48);
