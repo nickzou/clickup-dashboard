@@ -63,7 +63,13 @@ export function CompletionsChart({
 }) {
 	return (
 		<ChartContainer config={config} className="aspect-auto h-64 w-full">
-			<BarChart data={data} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+			{/* 100% stacks: each bar is that day's mix of outcomes. The tooltip
+			    keeps the actual counts. */}
+			<BarChart
+				data={data}
+				stackOffset="expand"
+				margin={{ top: 8, right: 0, left: 0, bottom: 0 }}
+			>
 				<CartesianGrid vertical={false} />
 				<XAxis
 					dataKey="date"
@@ -76,8 +82,10 @@ export function CompletionsChart({
 				<YAxis
 					tickLine={false}
 					axisLine={false}
-					allowDecimals={false}
-					width={32}
+					domain={[0, 1]}
+					ticks={[0, 0.25, 0.5, 0.75, 1]}
+					tickFormatter={(v: number) => `${Math.round(v * 100)}%`}
+					width={40}
 				/>
 				<ChartTooltip
 					cursor={{ fill: "var(--muted)", opacity: 0.6 }}

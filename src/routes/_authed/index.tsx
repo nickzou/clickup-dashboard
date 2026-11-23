@@ -110,7 +110,7 @@ function OverviewPage() {
 						<CardDescription>
 							{data.bucket === "space"
 								? "Completed today, by space"
-								: `Finished tasks per ${data.bucket} over ${range.text}, by outcome`}
+								: `How each ${data.bucket}'s finished tasks resolved over ${range.text}`}
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
