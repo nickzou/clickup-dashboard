@@ -38,8 +38,9 @@ export function KpiTile({
 				</CardTitle>
 			</CardHeader>
 			{(delta || detail) && (
-				<CardContent className="text-sm text-muted-foreground">
-					{delta ? <DeltaLine {...delta} /> : detail}
+				<CardContent className="grid gap-0.5 text-sm text-muted-foreground">
+					{delta && <DeltaLine {...delta} />}
+					{detail && <span>{detail}</span>}
 				</CardContent>
 			)}
 		</Card>

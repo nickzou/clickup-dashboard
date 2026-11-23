@@ -3,6 +3,7 @@ import { and, asc, eq, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { spaces, tasks } from "../db/schema";
 import { addDays, dayKey, dayRange, hourOf, weekStart } from "./dates";
+import { bridgesStreak, outcomeOf, POINTS } from "./outcomes";
 import { RANGES, type RangeDef, type RangeKey } from "./ranges";
 
 const DONE_TYPES = ["done", "closed"];
@@ -60,28 +61,54 @@ export function getOverviewStats(
 			markedAt: markedDoneAt,
 			due: tasks.dueDate,
 			spaceId: tasks.spaceId,
+			status: tasks.status,
+			statusType: tasks.statusType,
 		})
 		.from(tasks)
 		.where(and(scope, isNotNull(markedDoneAt)))
 		.all();
+	// Points per day: 1 per completed task, ½ per partial (see outcomes.ts).
 	const perDay = new Map<string, number>();
 	const perSpaceInRange = new Map<string, number>();
 	const perHourToday = new Array<number>(24).fill(0);
+	// Days with a skipped task, which keep a streak alive.
+	const bridgeDays = new Set<string>();
 	let completedPrev = 0;
+	// Completed + partial + not done in range: the completion rate's base.
+	let resolvedInRange = 0;
+	// Finished tasks in range by outcome (task counts, not points).
+	const outcomes = { completed: 0, partial: 0, notDone: 0, excluded: 0 };
 	for (const c of completions) {
+		const outcome = outcomeOf(c.status, c.statusType);
+		if (!outcome) continue;
 		const { key, at, backfilled } = completionDay(c.markedAt, c.due, tz);
-		perDay.set(key, (perDay.get(key) ?? 0) + 1);
-		if (key >= from && key <= today) {
-			perSpaceInRange.set(c.spaceId, (perSpaceInRange.get(c.spaceId) ?? 0) + 1);
+		const inRange = key >= from && key <= today;
+		if (inRange) outcomes[outcome]++;
+		if (outcome === "excluded") {
+			if (bridgesStreak(c.status)) bridgeDays.add(key);
+			continue;
+		}
+		const points = POINTS[outcome];
+		if (inRange) resolvedInRange++;
+		if (points === 0) continue;
+
+		perDay.set(key, (perDay.get(key) ?? 0) + points);
+		if (inRange) {
+			perSpaceInRange.set(
+				c.spaceId,
+				(perSpaceInRange.get(c.spaceId) ?? 0) + points,
+			);
 		} else if (key >= prevFrom && key <= prevTo && at <= prevCutoff) {
-			completedPrev++;
+			completedPrev += points;
 		}
 		// Backfilled tasks only have a placeholder time; hours use tick-offs.
-		if (key === today && !backfilled) perHourToday[hourOf(at, tz)]++;
+		if (key === today && !backfilled) perHourToday[hourOf(at, tz)] += points;
 	}
 
 	const rangeDays = dayRange(from, today);
 	const completed = rangeDays.reduce((n, k) => n + (perDay.get(k) ?? 0), 0);
+	const completionRate =
+		resolvedInRange > 0 ? completed / resolvedInRange : null;
 
 	// Hourly for today, daily up to 90 days, weekly beyond. `date` is a day
 	// key, or "YYYY-MM-DDTHH" for hours.
@@ -150,12 +177,14 @@ export function getOverviewStats(
 		kpis: {
 			completed,
 			completedPrev,
+			completionRate,
 			open: open.length,
 			overdue,
 			dueToday,
-			...streaks(perDay, today),
+			...streaks(perDay, bridgeDays, today),
 		},
 		series,
+		outcomes,
 		heatmap,
 		bySpace,
 		spaces: [...spaceNames].map(([id, name]) => ({ id, name })),
@@ -164,24 +193,34 @@ export function getOverviewStats(
 
 export type OverviewStats = ReturnType<typeof getOverviewStats>;
 
-// Current streak: consecutive days with a completion, ending today, or
-// yesterday if nothing is done yet today (the streak isn't broken until the
-// day ends).
-function streaks(perDay: Map<string, number>, today: string) {
+// A streak is consecutive days with points. A skipped day (illness,
+// vacation…) with no points bridges it: the streak survives but doesn't grow.
+// The current streak ends today, or yesterday if nothing is done yet today
+// (it isn't broken until the day ends).
+function streaks(
+	perDay: Map<string, number>,
+	bridgeDays: Set<string>,
+	today: string,
+) {
+	const counts = (k: string) => (perDay.get(k) ?? 0) > 0;
+	const keeps = (k: string) => counts(k) || bridgeDays.has(k);
+
 	let current = 0;
-	let k = perDay.has(today) ? today : addDays(today, -1);
-	while (perDay.has(k)) {
-		current++;
+	let k = counts(today) ? today : addDays(today, -1);
+	while (keeps(k)) {
+		if (counts(k)) current++;
 		k = addDays(k, -1);
 	}
 
+	const days = [...perDay.keys(), ...bridgeDays].sort();
 	let best = 0;
 	let run = 0;
-	let prev: string | undefined;
-	for (const key of [...perDay.keys()].sort()) {
-		run = prev && addDays(prev, 1) === key ? run + 1 : 1;
-		best = Math.max(best, run);
-		prev = key;
+	if (days.length) {
+		for (const key of dayRange(days[0], today)) {
+			if (counts(key)) run++;
+			else if (!bridgeDays.has(key)) run = 0;
+			best = Math.max(best, run);
+		}
 	}
 	return { streak: current, bestStreak: best };
 }

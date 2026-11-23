@@ -1,0 +1,66 @@
+// What a finished task's status means for the stats. Status names are
+// ClickUp's, matched case-insensitively. A done/closed status not listed here
+// counts as completed, like ClickUp's own grouping.
+
+export type Outcome = "completed" | "partial" | "notDone" | "excluded";
+
+const STATUS_OUTCOMES: Record<string, Outcome> = {
+	// The work happened.
+	complete: "completed",
+	done: "completed",
+	shipped: "completed",
+	purchased: "completed",
+	went: "completed",
+	active: "completed",
+	promoted: "completed",
+
+	// Some of it happened.
+	"cut short": "partial",
+
+	// Resolved without doing it: lowers the completion rate.
+	"did not complete": "notDone",
+	"did not do": "notDone",
+	"did not purchase": "notDone",
+	"missed it": "notDone",
+	cancelled: "notDone",
+
+	// Neither credit nor fault: ignored by every stat.
+	"no action required": "excluded",
+	archived: "excluded",
+	parked: "excluded",
+	"hold on": "excluded",
+	"last minute switched": "excluded",
+	"illness skipped": "excluded",
+	"vacation skipped": "excluded",
+	"rest skipped": "excluded",
+	"social skipped": "excluded",
+};
+
+// A day whose only finished tasks have these statuses keeps a streak alive
+// without adding to it.
+const STREAK_BRIDGES = new Set([
+	"illness skipped",
+	"vacation skipped",
+	"rest skipped",
+	"social skipped",
+]);
+
+export const POINTS: Record<Outcome, number> = {
+	completed: 1,
+	partial: 0.5,
+	notDone: 0,
+	excluded: 0,
+};
+
+const FINISHED_TYPES = new Set(["done", "closed"]);
+
+// null means the task isn't finished.
+export function outcomeOf(status: string, statusType: string): Outcome | null {
+	const known = STATUS_OUTCOMES[status.toLowerCase()];
+	if (known) return known;
+	return FINISHED_TYPES.has(statusType) ? "completed" : null;
+}
+
+export function bridgesStreak(status: string): boolean {
+	return STREAK_BRIDGES.has(status.toLowerCase());
+}

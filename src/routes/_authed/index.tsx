@@ -6,6 +6,7 @@ import { CompletionsChart } from "#/components/overview/completions-chart";
 import { OverviewFilters } from "#/components/overview/filters";
 import { Heatmap } from "#/components/overview/heatmap";
 import { KpiTile } from "#/components/overview/kpi-tile";
+import { OutcomeBreakdown } from "#/components/overview/outcome-breakdown";
 import { SpaceBreakdown } from "#/components/overview/space-breakdown";
 import {
 	Card,
@@ -72,6 +73,11 @@ function OverviewPage() {
 						previous: kpis.completedPrev,
 						label: comparisonLabel(search.range, data.today),
 					}}
+					detail={
+						kpis.completionRate === null
+							? undefined
+							: `${Math.round(kpis.completionRate * 100)}% of resolved tasks done`
+					}
 				/>
 				<KpiTile
 					label="Open tasks"
@@ -111,6 +117,33 @@ function OverviewPage() {
 				</Card>
 				<Card>
 					<CardHeader>
+						<CardTitle>Outcomes</CardTitle>
+						<CardDescription>
+							{search.range === "today"
+								? "How today's finished tasks resolved"
+								: `How finished tasks resolved over ${range.text}`}
+						</CardDescription>
+					</CardHeader>
+					<CardContent>
+						<OutcomeBreakdown counts={data.outcomes} />
+					</CardContent>
+				</Card>
+			</div>
+
+			<div className="grid gap-4 md:gap-6 xl:grid-cols-3">
+				<Card className="min-w-0 xl:col-span-2">
+					<CardHeader>
+						<CardTitle>Activity</CardTitle>
+						<CardDescription>
+							Tasks completed each day, past year
+						</CardDescription>
+					</CardHeader>
+					<CardContent>
+						<Heatmap days={data.heatmap} />
+					</CardContent>
+				</Card>
+				<Card>
+					<CardHeader>
 						<CardTitle>By space</CardTitle>
 						<CardDescription>
 							{search.range === "today"
@@ -129,16 +162,6 @@ function OverviewPage() {
 					</CardContent>
 				</Card>
 			</div>
-
-			<Card>
-				<CardHeader>
-					<CardTitle>Activity</CardTitle>
-					<CardDescription>Tasks completed each day, past year</CardDescription>
-				</CardHeader>
-				<CardContent>
-					<Heatmap days={data.heatmap} />
-				</CardContent>
-			</Card>
 		</div>
 	);
 }
