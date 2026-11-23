@@ -86,6 +86,13 @@ export function Heatmap({ days }: { days: Day[] }) {
 					>
 						{weeks.map((week, wi) => {
 							const monthStart = week.find((d) => d.date.endsWith("-01"));
+							// The first column names its month too, unless a new month
+							// starts within two columns and its label would overlap.
+							const labelFirst =
+								wi === 0 &&
+								!weeks
+									.slice(1, 3)
+									.some((w) => w.some((d) => d.date.endsWith("-01")));
 							return (
 								<div
 									key={week[0].date}
@@ -96,7 +103,7 @@ export function Heatmap({ days }: { days: Day[] }) {
 									}}
 								>
 									<span className="relative text-xs text-muted-foreground">
-										{(monthStart || wi === 0) && (
+										{(monthStart || labelFirst) && (
 											<span className="absolute left-0 whitespace-nowrap">
 												{formatMonth((monthStart ?? week[0]).date)}
 											</span>

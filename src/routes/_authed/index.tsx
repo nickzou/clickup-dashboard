@@ -71,7 +71,7 @@ function OverviewPage() {
 		<div className="grid grid-cols-1 gap-4 md:gap-6">
 			{filters}
 
-			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+			<div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
 				<KpiTile
 					label="Completed"
 					value={kpis.completed.toLocaleString()}
@@ -87,18 +87,13 @@ function OverviewPage() {
 					}
 				/>
 				<KpiTile
-					label="Open tasks"
-					value={kpis.open.toLocaleString()}
+					label="Overdue"
+					value={kpis.overdue.toLocaleString()}
 					detail={
 						kpis.dueToday.total
 							? `${kpis.dueToday.done} of ${plural(kpis.dueToday.total, "task")} due today done`
 							: "Nothing due today"
 					}
-				/>
-				<KpiTile
-					label="Overdue"
-					value={kpis.overdue.toLocaleString()}
-					detail="Open and past their due date"
 					tone={kpis.overdue > 0 ? "critical" : undefined}
 				/>
 				<KpiTile
@@ -178,8 +173,8 @@ function OverviewSkeleton() {
 	return (
 		<div className="grid grid-cols-1 gap-4 md:gap-6">
 			<Skeleton className="h-9 w-80 max-w-full" />
-			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-				{[0, 1, 2, 3].map((i) => (
+			<div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+				{[0, 1, 2].map((i) => (
 					<Skeleton key={i} className="h-32 rounded-xl" />
 				))}
 			</div>
