@@ -4,7 +4,7 @@
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
 
-export function dayKey(ms: number, timeZone: string): string {
+function formatter(timeZone: string) {
 	let f = formatters.get(timeZone);
 	if (!f) {
 		f = new Intl.DateTimeFormat("en-CA", {
@@ -12,10 +12,30 @@ export function dayKey(ms: number, timeZone: string): string {
 			year: "numeric",
 			month: "2-digit",
 			day: "2-digit",
+			hour: "2-digit",
+			hourCycle: "h23",
 		});
 		formatters.set(timeZone, f);
 	}
-	return f.format(ms);
+	return f;
+}
+
+function parts(ms: number, timeZone: string) {
+	return Object.fromEntries(
+		formatter(timeZone)
+			.formatToParts(ms)
+			.map((p) => [p.type, p.value]),
+	);
+}
+
+export function dayKey(ms: number, timeZone: string): string {
+	const p = parts(ms, timeZone);
+	return `${p.year}-${p.month}-${p.day}`;
+}
+
+// Local hour of day, 0-23.
+export function hourOf(ms: number, timeZone: string): number {
+	return Number(parts(ms, timeZone).hour);
 }
 
 function toUtc(key: string): Date {
@@ -29,10 +49,9 @@ export function addDays(key: string, days: number): string {
 	return d.toISOString().slice(0, 10);
 }
 
-// Monday of the key's week.
+// Sunday of the key's week.
 export function weekStart(key: string): string {
-	const dow = (toUtc(key).getUTCDay() + 6) % 7;
-	return addDays(key, -dow);
+	return addDays(key, -toUtc(key).getUTCDay());
 }
 
 export function dayRange(from: string, to: string): string[] {

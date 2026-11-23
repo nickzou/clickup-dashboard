@@ -5,10 +5,11 @@ import { requireAuth } from "../auth";
 import { getDb } from "../db/client";
 import { env } from "../env";
 import { getOverviewStats } from "./overview";
-import { RANGES } from "./ranges";
+import { RANGE_KEYS } from "./ranges";
 
 export const overviewInput = z.object({
-	range: z.enum(Object.keys(RANGES) as [keyof typeof RANGES]).default("30d"),
+	// Unknown values (old or mistyped links) fall back to the default.
+	range: z.enum(RANGE_KEYS).default("30d").catch("30d"),
 	space: z.string().optional(),
 });
 export type OverviewInput = z.infer<typeof overviewInput>;

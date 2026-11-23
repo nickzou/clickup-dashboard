@@ -23,6 +23,16 @@ const month = new Intl.DateTimeFormat("en", {
 });
 
 export const formatShortDay = (key: string) => short.format(parse(key));
+
+// "YYYY-MM-DDTHH" hour keys from the hourly series.
+const hourOfKey = (key: string) => Number(key.slice(11, 13));
+const hourLabel = (h: number) =>
+	`${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? "AM" : "PM"}`;
+export const formatHour = (key: string) => hourLabel(hourOfKey(key));
+export const formatHourSpan = (key: string) => {
+	const h = hourOfKey(key);
+	return `${hourLabel(h)} – ${hourLabel((h + 1) % 24)}`;
+};
 export const formatLongDay = (key: string) => long.format(parse(key));
 export const formatMonth = (key: string) => month.format(parse(key));
 

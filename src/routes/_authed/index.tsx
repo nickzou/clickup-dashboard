@@ -17,6 +17,7 @@ import {
 import { Skeleton } from "#/components/ui/skeleton";
 import { plural } from "#/lib/format";
 import { overviewInput, overviewQuery } from "#/server/stats";
+import { RANGES } from "#/server/stats/ranges";
 
 export const Route = createFileRoute("/_authed/")({
 	validateSearch: overviewInput,
@@ -27,22 +28,12 @@ export const Route = createFileRoute("/_authed/")({
 	component: OverviewPage,
 });
 
-const RANGE_TEXT = {
-	"30d": "the last 30 days",
-	"90d": "the last 90 days",
-	"12m": "the last 12 months",
-};
-const PREV_TEXT = {
-	"30d": "previous 30 days",
-	"90d": "previous 90 days",
-	"12m": "previous 12 months",
-};
-
 function OverviewPage() {
 	const search = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
 	const { data } = useSuspenseQuery(overviewQuery(search));
 	const { kpis } = data;
+	const range = RANGES[search.range];
 
 	const filters = (
 		<OverviewFilters
@@ -79,7 +70,7 @@ function OverviewPage() {
 					delta={{
 						current: kpis.completed,
 						previous: kpis.completedPrev,
-						label: PREV_TEXT[search.range],
+						label: range.prevText,
 					}}
 				/>
 				<KpiTile
@@ -109,7 +100,9 @@ function OverviewPage() {
 					<CardHeader>
 						<CardTitle>Completions</CardTitle>
 						<CardDescription>
-							Tasks completed per {data.bucket} over {RANGE_TEXT[search.range]}
+							{data.bucket === "hour"
+								? "Tasks completed each hour today"
+								: `Tasks completed per ${data.bucket} over ${range.text}`}
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
@@ -120,7 +113,9 @@ function OverviewPage() {
 					<CardHeader>
 						<CardTitle>By space</CardTitle>
 						<CardDescription>
-							Completed over {RANGE_TEXT[search.range]}
+							{search.range === "today"
+								? "Completed today"
+								: `Completed over ${range.text}`}
 						</CardDescription>
 					</CardHeader>
 					<CardContent>

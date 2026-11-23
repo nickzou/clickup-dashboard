@@ -6,9 +6,7 @@ import {
 	SelectValue,
 } from "#/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
-
-const RANGE_LABELS = { "30d": "30 days", "90d": "90 days", "12m": "12 months" };
-export type RangeKey = keyof typeof RANGE_LABELS;
+import { RANGE_KEYS, RANGES, type RangeKey } from "#/server/stats/ranges";
 
 const ALL = "all";
 
@@ -25,16 +23,33 @@ export function OverviewFilters({
 }) {
 	return (
 		<div className="flex flex-wrap items-center gap-2">
+			{/* Six ranges don't fit a phone's width as buttons; use a menu there. */}
+			<Select
+				value={range}
+				onValueChange={(v) => onChange({ range: v as RangeKey })}
+			>
+				<SelectTrigger className="w-36 md:hidden" aria-label="Time range">
+					<SelectValue />
+				</SelectTrigger>
+				<SelectContent>
+					{RANGE_KEYS.map((key) => (
+						<SelectItem key={key} value={key}>
+							{RANGES[key].label}
+						</SelectItem>
+					))}
+				</SelectContent>
+			</Select>
 			<ToggleGroup
 				type="single"
 				variant="outline"
 				value={range}
 				onValueChange={(v) => v && onChange({ range: v as RangeKey })}
 				aria-label="Time range"
+				className="hidden md:flex"
 			>
-				{Object.entries(RANGE_LABELS).map(([key, label]) => (
+				{RANGE_KEYS.map((key) => (
 					<ToggleGroupItem key={key} value={key} className="px-3">
-						{label}
+						{RANGES[key].label}
 					</ToggleGroupItem>
 				))}
 			</ToggleGroup>

@@ -5,7 +5,12 @@ import {
 	ChartTooltip,
 	ChartTooltipContent,
 } from "#/components/ui/chart";
-import { formatLongDay, formatShortDay } from "#/lib/format";
+import {
+	formatHour,
+	formatHourSpan,
+	formatLongDay,
+	formatShortDay,
+} from "#/lib/format";
 
 const config = {
 	count: { label: "Completed", color: "var(--chart-1)" },
@@ -16,7 +21,7 @@ export function CompletionsChart({
 	bucket,
 }: {
 	data: { date: string; count: number }[];
-	bucket: "day" | "week";
+	bucket: "hour" | "day" | "week";
 }) {
 	return (
 		<ChartContainer config={config} className="aspect-auto h-64 w-full">
@@ -28,7 +33,7 @@ export function CompletionsChart({
 					axisLine={false}
 					tickMargin={8}
 					minTickGap={24}
-					tickFormatter={formatShortDay}
+					tickFormatter={bucket === "hour" ? formatHour : formatShortDay}
 				/>
 				<YAxis
 					tickLine={false}
@@ -42,6 +47,7 @@ export function CompletionsChart({
 						<ChartTooltipContent
 							labelFormatter={(_, payload) => {
 								const key = payload?.[0]?.payload?.date as string;
+								if (bucket === "hour") return formatHourSpan(key);
 								return bucket === "week"
 									? `Week of ${formatShortDay(key)}`
 									: formatLongDay(key);

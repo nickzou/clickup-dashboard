@@ -38,7 +38,7 @@ export function Heatmap({ days }: { days: Day[] }) {
 	const [hover, setHover] = useState<{ day: Day; x: number; y: number }>();
 	const t = useMemo(() => thresholds(days), [days]);
 
-	// Days start on a Monday; chunk into week columns.
+	// Days start on a Sunday; chunk into week columns.
 	const weeks = useMemo(() => {
 		const out: Day[][] = [];
 		for (let i = 0; i < days.length; i += 7) out.push(days.slice(i, i + 7));
@@ -67,7 +67,7 @@ export function Heatmap({ days }: { days: Day[] }) {
 						aria-hidden
 					>
 						<span />
-						{["Mon", "", "Wed", "", "Fri", "", ""].map((d, i) => (
+						{["", "Mon", "", "Wed", "", "Fri", ""].map((d, i) => (
 							<span
 								// biome-ignore lint/suspicious/noArrayIndexKey: fixed list
 								key={i}
