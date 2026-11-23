@@ -20,6 +20,13 @@ const DONE_TYPES = ["done", "closed"];
 const HEATMAP_WEEKS = 53;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+type OutcomeCounts = { completed: number; partial: number; notDone: number };
+const emptyOutcomeCounts = (): OutcomeCounts => ({
+	completed: 0,
+	partial: 0,
+	notDone: 0,
+});
+
 // Tasks due today by state. Excluded outcomes aren't counted at all.
 type Due = { done: number; notDone: number; open: number; total: number };
 const emptyDue = (): Due => ({ done: 0, notDone: 0, open: 0, total: 0 });
@@ -81,6 +88,8 @@ export function getOverviewStats(
 	let resolvedInRange = 0;
 	// Finished tasks in range by outcome (task counts, not points).
 	const outcomes = { completed: 0, partial: 0, notDone: 0, excluded: 0 };
+	// Finished tasks per day by outcome, for the stacked Completions chart.
+	const perDayOutcome = new Map<string, OutcomeCounts>();
 	for (const c of completions) {
 		const outcome = outcomeOf(c.status, c.statusType);
 		if (!outcome) continue;
@@ -92,7 +101,12 @@ export function getOverviewStats(
 			continue;
 		}
 		const points = POINTS[outcome];
-		if (inRange) resolvedInRange++;
+		if (inRange) {
+			resolvedInRange++;
+			const day = perDayOutcome.get(key) ?? emptyOutcomeCounts();
+			day[outcome]++;
+			perDayOutcome.set(key, day);
+		}
 		if (points === 0) continue;
 
 		perDay.set(key, (perDay.get(key) ?? 0) + points);
@@ -114,19 +128,23 @@ export function getOverviewStats(
 	const completionRate =
 		resolvedInRange > 0 ? completed / resolvedInRange : null;
 
-	// Daily up to 90 days, weekly beyond. Today has no series: its chart is
-	// the by-space breakdown.
-	const series: { date: string; count: number }[] = [];
-	if (bucket === "day") {
-		for (const k of rangeDays)
-			series.push({ date: k, count: perDay.get(k) ?? 0 });
-	} else if (bucket === "week") {
-		const weeks = new Map<string, number>();
+	// Finished tasks by outcome, daily up to 90 days, weekly beyond. Today has
+	// no series: its chart is the by-space breakdown.
+	const series: ({ date: string } & OutcomeCounts)[] = [];
+	if (bucket === "day" || bucket === "week") {
+		const buckets = new Map<string, OutcomeCounts>();
 		for (const k of rangeDays) {
-			const w = weekStart(k);
-			weeks.set(w, (weeks.get(w) ?? 0) + (perDay.get(k) ?? 0));
+			const b = bucket === "week" ? weekStart(k) : k;
+			const acc = buckets.get(b) ?? emptyOutcomeCounts();
+			const day = perDayOutcome.get(k);
+			if (day) {
+				acc.completed += day.completed;
+				acc.partial += day.partial;
+				acc.notDone += day.notDone;
+			}
+			buckets.set(b, acc);
 		}
-		for (const [date, count] of weeks) series.push({ date, count });
+		for (const [date, counts] of buckets) series.push({ date, ...counts });
 	}
 
 	// Heatmap: whole weeks (Sun-Sat) ending with the current one.

@@ -110,7 +110,7 @@ function OverviewPage() {
 						<CardDescription>
 							{data.bucket === "space"
 								? "Completed today, by space"
-								: `Tasks completed per ${data.bucket} over ${range.text}`}
+								: `Finished tasks per ${data.bucket} over ${range.text}, by outcome`}
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
@@ -136,7 +136,7 @@ function OverviewPage() {
 				</Card>
 			</div>
 
-			<div className="grid grid-cols-1 gap-4 md:gap-6 xl:grid-cols-3">
+			<div className="grid grid-cols-1 items-start gap-4 md:gap-6 xl:grid-cols-3">
 				{/* On Today the Completions card already shows the space breakdown. */}
 				<Card
 					className={
