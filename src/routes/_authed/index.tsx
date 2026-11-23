@@ -56,7 +56,7 @@ function OverviewPage() {
 
 	if (data.heatmap.every((d) => d.count === 0) && kpis.open === 0) {
 		return (
-			<div className="grid gap-4">
+			<div className="grid grid-cols-1 gap-4">
 				{filters}
 				<EmptyState
 					icon={CloudOff}
@@ -68,7 +68,7 @@ function OverviewPage() {
 	}
 
 	return (
-		<div className="grid gap-4 md:gap-6">
+		<div className="grid grid-cols-1 gap-4 md:gap-6">
 			{filters}
 
 			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -108,7 +108,7 @@ function OverviewPage() {
 				/>
 			</div>
 
-			<div className="grid gap-4 md:gap-6 xl:grid-cols-3">
+			<div className="grid grid-cols-1 gap-4 md:gap-6 xl:grid-cols-3">
 				<Card className="xl:col-span-2">
 					<CardHeader>
 						<CardTitle>Completions</CardTitle>
@@ -141,7 +141,7 @@ function OverviewPage() {
 				</Card>
 			</div>
 
-			<div className="grid gap-4 md:gap-6 xl:grid-cols-3">
+			<div className="grid grid-cols-1 gap-4 md:gap-6 xl:grid-cols-3">
 				{/* On Today the Completions card already shows the space breakdown. */}
 				<Card
 					className={
@@ -176,7 +176,7 @@ function OverviewPage() {
 
 function OverviewSkeleton() {
 	return (
-		<div className="grid gap-4 md:gap-6">
+		<div className="grid grid-cols-1 gap-4 md:gap-6">
 			<Skeleton className="h-9 w-80 max-w-full" />
 			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
 				{[0, 1, 2, 3].map((i) => (

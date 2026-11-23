@@ -53,7 +53,7 @@ export function OutcomeBreakdown({ counts }: { counts: Counts }) {
 	const visible = ROWS.filter((r) => counts[r.key] > 0);
 
 	return (
-		<div className="grid gap-4">
+		<div className="grid grid-cols-1 gap-4">
 			<div
 				className="flex h-3 gap-0.5 overflow-hidden rounded-full"
 				role="img"
@@ -73,7 +73,7 @@ export function OutcomeBreakdown({ counts }: { counts: Counts }) {
 					/>
 				))}
 			</div>
-			<ul className="grid gap-2.5">
+			<ul className="grid grid-cols-1 gap-2.5">
 				{ROWS.map((r) => {
 					const n = counts[r.key];
 					return (

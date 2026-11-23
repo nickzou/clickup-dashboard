@@ -25,11 +25,11 @@ export function SpaceBreakdown({ rows }: { rows: (Row & { lists: Row[] })[] }) {
 	const progress = rows.some((r) => r.due);
 	const max = Math.max(1, ...rows.map((r) => r.count));
 	return (
-		<div className="grid gap-4">
+		<div className="grid grid-cols-1 gap-4">
 			{progress && <Legend />}
-			<ul className="grid gap-4">
+			<ul className="grid grid-cols-1 gap-4">
 				{rows.map((space) => (
-					<li key={space.id} className="grid gap-2">
+					<li key={space.id} className="grid grid-cols-1 gap-2">
 						<BarRow row={space} max={max} />
 						{space.lists.length > 0 && (
 							<ul
@@ -83,7 +83,7 @@ function BarRow({
 }) {
 	const height = nested ? "h-1.5" : "h-2.5";
 	return (
-		<div className="grid gap-1">
+		<div className="grid grid-cols-1 gap-1">
 			<div
 				className={cn(
 					"flex items-baseline gap-2",
