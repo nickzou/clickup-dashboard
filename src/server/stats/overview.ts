@@ -1,0 +1,147 @@
+import "@tanstack/react-start/server-only";
+import { and, asc, eq, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
+import type { Db } from "../db/client";
+import { spaces, tasks } from "../db/schema";
+import { addDays, dayKey, dayRange, weekStart } from "./dates";
+import { RANGES, type RangeKey } from "./ranges";
+
+const DONE_TYPES = ["done", "closed"];
+const HEATMAP_WEEKS = 53;
+
+// A task's completion time: when it entered a done status, else when it closed.
+const completedAt = sql<number>`coalesce(${tasks.dateDone}, ${tasks.dateClosed})`;
+
+export function getOverviewStats(
+	db: Db,
+	opts: { range: RangeKey; spaceId?: string; timeZone: string },
+) {
+	const { range, spaceId, timeZone: tz } = opts;
+	const now = Date.now();
+	const today = dayKey(now, tz);
+	const days = RANGES[range];
+	const from = addDays(today, -(days - 1));
+	const prevFrom = addDays(from, -days);
+
+	const scope = and(
+		eq(tasks.isMine, true),
+		isNull(tasks.deletedAt),
+		spaceId ? eq(tasks.spaceId, spaceId) : undefined,
+	);
+
+	// Every completion, bucketed by local day. A few thousand rows: cheaper to
+	// bucket here than to teach SQLite about time zones.
+	const completions = db
+		.select({ at: completedAt, spaceId: tasks.spaceId })
+		.from(tasks)
+		.where(and(scope, isNotNull(completedAt)))
+		.all();
+	const perDay = new Map<string, number>();
+	const perSpaceInRange = new Map<string, number>();
+	let completedPrev = 0;
+	for (const c of completions) {
+		const key = dayKey(c.at, tz);
+		perDay.set(key, (perDay.get(key) ?? 0) + 1);
+		if (key >= from && key <= today) {
+			perSpaceInRange.set(c.spaceId, (perSpaceInRange.get(c.spaceId) ?? 0) + 1);
+		} else if (key >= prevFrom && key < from) {
+			completedPrev++;
+		}
+	}
+
+	const rangeDays = dayRange(from, today);
+	const completed = rangeDays.reduce((n, k) => n + (perDay.get(k) ?? 0), 0);
+
+	// Daily columns up to 90 days; weekly beyond that.
+	const bucket: "day" | "week" = range === "12m" ? "week" : "day";
+	const series: { date: string; count: number }[] = [];
+	if (bucket === "day") {
+		for (const k of rangeDays)
+			series.push({ date: k, count: perDay.get(k) ?? 0 });
+	} else {
+		const weeks = new Map<string, number>();
+		for (const k of rangeDays) {
+			const w = weekStart(k);
+			weeks.set(w, (weeks.get(w) ?? 0) + (perDay.get(k) ?? 0));
+		}
+		for (const [date, count] of weeks) series.push({ date, count });
+	}
+
+	// Heatmap: whole weeks (Mon-Sun) ending with the current one.
+	const heatStart = addDays(weekStart(today), -(HEATMAP_WEEKS - 1) * 7);
+	const heatmap = dayRange(heatStart, today).map((date) => ({
+		date,
+		count: perDay.get(date) ?? 0,
+	}));
+
+	const open = db
+		.select({ due: tasks.dueDate })
+		.from(tasks)
+		.where(and(scope, notInArray(tasks.statusType, DONE_TYPES)))
+		.all();
+	let overdue = 0;
+	let dueToday = 0;
+	for (const t of open) {
+		if (t.due === null) continue;
+		const key = dayKey(t.due, tz);
+		if (key < today) overdue++;
+		else if (key === today) dueToday++;
+	}
+
+	const spaceNames = new Map(
+		db
+			.select({ id: spaces.id, name: spaces.name })
+			.from(spaces)
+			.orderBy(asc(spaces.name))
+			.all()
+			.map((s) => [s.id, s.name]),
+	);
+	const bySpace = [...perSpaceInRange]
+		.map(([id, count]) => ({
+			id,
+			name: spaceNames.get(id) ?? "Unknown",
+			count,
+		}))
+		.sort((a, b) => b.count - a.count);
+
+	return {
+		today,
+		from,
+		bucket,
+		kpis: {
+			completed,
+			completedPrev,
+			open: open.length,
+			overdue,
+			dueToday,
+			...streaks(perDay, today),
+		},
+		series,
+		heatmap,
+		bySpace,
+		spaces: [...spaceNames].map(([id, name]) => ({ id, name })),
+	};
+}
+
+export type OverviewStats = ReturnType<typeof getOverviewStats>;
+
+// Current streak: consecutive days with a completion, ending today, or
+// yesterday if nothing is done yet today (the streak isn't broken until the
+// day ends).
+function streaks(perDay: Map<string, number>, today: string) {
+	let current = 0;
+	let k = perDay.has(today) ? today : addDays(today, -1);
+	while (perDay.has(k)) {
+		current++;
+		k = addDays(k, -1);
+	}
+
+	let best = 0;
+	let run = 0;
+	let prev: string | undefined;
+	for (const key of [...perDay.keys()].sort()) {
+		run = prev && addDays(prev, 1) === key ? run + 1 : 1;
+		best = Math.max(best, run);
+		prev = key;
+	}
+	return { streak: current, bestStreak: best };
+}
