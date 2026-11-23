@@ -3,10 +3,11 @@ import { and, asc, eq, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { spaces, tasks } from "../db/schema";
 import { addDays, dayKey, dayRange, hourOf, weekStart } from "./dates";
-import { RANGES, type RangeKey } from "./ranges";
+import { RANGES, type RangeDef, type RangeKey } from "./ranges";
 
 const DONE_TYPES = ["done", "closed"];
 const HEATMAP_WEEKS = 53;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // A task's completion time: when it entered a done status, else when it closed.
 const completedAt = sql<number>`coalesce(${tasks.dateDone}, ${tasks.dateClosed})`;
@@ -18,8 +19,13 @@ export function getOverviewStats(
 	const { range, spaceId, timeZone: tz } = opts;
 	const now = Date.now();
 	const today = dayKey(now, tz);
-	const { bucket, bounds } = RANGES[range];
-	const { from, prevFrom, prevTo } = bounds(today);
+	const def: RangeDef = RANGES[range];
+	const { from, prevFrom, prevTo } = def.bounds(today);
+	const prevCutoff =
+		def.prevCutoffDays === undefined
+			? Number.POSITIVE_INFINITY
+			: now - def.prevCutoffDays * DAY_MS;
+	const { bucket } = def;
 
 	const scope = and(
 		eq(tasks.isMine, true),
@@ -43,7 +49,7 @@ export function getOverviewStats(
 		perDay.set(key, (perDay.get(key) ?? 0) + 1);
 		if (key >= from && key <= today) {
 			perSpaceInRange.set(c.spaceId, (perSpaceInRange.get(c.spaceId) ?? 0) + 1);
-		} else if (key >= prevFrom && key <= prevTo) {
+		} else if (key >= prevFrom && key <= prevTo && c.at <= prevCutoff) {
 			completedPrev++;
 		}
 		if (key === today) perHourToday[hourOf(c.at, tz)]++;

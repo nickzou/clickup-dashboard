@@ -2,7 +2,7 @@
 // it must stay free of server-only imports.
 import { addDays, weekdayName, weekStart } from "./dates";
 
-type RangeDef = {
+export type RangeDef = {
 	label: string;
 	// "over {text}" in chart descriptions
 	text: string;
@@ -11,6 +11,9 @@ type RangeDef = {
 	bucket: "hour" | "day" | "week";
 	// First day of the range and the comparison period, given today's key.
 	bounds: (today: string) => { from: string; prevFrom: string; prevTo: string };
+	// When set, the comparison period also stops at this many days before the
+	// current moment, so a partial period is matched to the same time of day.
+	prevCutoffDays?: number;
 };
 
 // The last `n` days including today, compared with the `n` days before.
@@ -33,15 +36,22 @@ export const RANGES = {
 			return { from: today, prevFrom: prev, prevTo: prev };
 		},
 	},
+	// Sunday to now, compared with last Sunday up to the same weekday and
+	// time: a whole previous week would always look ahead.
 	week: {
 		label: "This week",
 		text: "this week",
-		prevText: "last week",
+		prevText: "this point last week",
 		bucket: "day",
 		bounds: (today) => {
 			const from = weekStart(today);
-			return { from, prevFrom: addDays(from, -7), prevTo: addDays(from, -1) };
+			return {
+				from,
+				prevFrom: addDays(from, -7),
+				prevTo: addDays(today, -7),
+			};
 		},
+		prevCutoffDays: 7,
 	},
 	"7d": {
 		label: "7 days",
