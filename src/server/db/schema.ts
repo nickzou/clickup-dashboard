@@ -1,0 +1,117 @@
+import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+
+// Timestamps from ClickUp are stored as epoch milliseconds, exactly as ClickUp
+// sends them. Bucketing into days happens at query time using TZ.
+
+export const spaces = sqliteTable("spaces", {
+	id: text().primaryKey(),
+	name: text().notNull(),
+	color: text(),
+	archived: integer({ mode: "boolean" }).notNull().default(false),
+	syncedAt: integer().notNull(),
+});
+
+export const folders = sqliteTable("folders", {
+	id: text().primaryKey(),
+	spaceId: text().notNull(),
+	name: text().notNull(),
+	archived: integer({ mode: "boolean" }).notNull().default(false),
+	syncedAt: integer().notNull(),
+});
+
+export const lists = sqliteTable("lists", {
+	id: text().primaryKey(),
+	spaceId: text().notNull(),
+	// Null for lists that live directly in a space.
+	folderId: text(),
+	name: text().notNull(),
+	archived: integer({ mode: "boolean" }).notNull().default(false),
+	syncedAt: integer().notNull(),
+});
+
+export type CustomFieldValue = {
+	id: string;
+	name: string;
+	type: string;
+	value: unknown;
+};
+
+export const tasks = sqliteTable(
+	"tasks",
+	{
+		id: text().primaryKey(),
+		name: text().notNull(),
+		url: text().notNull(),
+		spaceId: text().notNull(),
+		folderId: text(),
+		listId: text().notNull(),
+		parentId: text(),
+		status: text().notNull(),
+		// "open" | "custom" | "done" | "closed"
+		statusType: text().notNull(),
+		statusColor: text(),
+		priority: text(),
+		tags: text({ mode: "json" }).$type<string[]>().notNull(),
+		assigneeIds: text({ mode: "json" }).$type<number[]>().notNull(),
+		// Assigned to the token's user, or to nobody. Stats only count these.
+		isMine: integer({ mode: "boolean" }).notNull(),
+		archived: integer({ mode: "boolean" }).notNull().default(false),
+		dateCreated: integer().notNull(),
+		dateUpdated: integer().notNull(),
+		dateDone: integer(),
+		dateClosed: integer(),
+		dueDate: integer(),
+		startDate: integer(),
+		timeEstimate: integer(),
+		customFields: text({ mode: "json" }).$type<CustomFieldValue[]>().notNull(),
+		syncedAt: integer().notNull(),
+		// Set by the nightly reconcile when ClickUp no longer returns the task.
+		deletedAt: integer(),
+	},
+	(t) => [
+		index("tasks_date_done_idx").on(t.dateDone),
+		index("tasks_date_closed_idx").on(t.dateClosed),
+		index("tasks_due_date_idx").on(t.dueDate),
+		index("tasks_list_idx").on(t.listId),
+		index("tasks_space_idx").on(t.spaceId),
+	],
+);
+
+// ClickUp's API has no task history, so due-date changes are recorded as the
+// sync observes them. History starts at the first sync.
+export const taskDueChanges = sqliteTable(
+	"task_due_changes",
+	{
+		id: integer().primaryKey({ autoIncrement: true }),
+		taskId: text().notNull(),
+		oldDueDate: integer(),
+		newDueDate: integer(),
+		seenAt: integer().notNull(),
+	},
+	(t) => [index("task_due_changes_task_idx").on(t.taskId)],
+);
+
+export const timeEntries = sqliteTable(
+	"time_entries",
+	{
+		id: text().primaryKey(),
+		taskId: text(),
+		start: integer().notNull(),
+		// Milliseconds. Running timers are skipped until they stop.
+		duration: integer().notNull(),
+		billable: integer({ mode: "boolean" }).notNull().default(false),
+		syncedAt: integer().notNull(),
+	},
+	(t) => [index("time_entries_start_idx").on(t.start)],
+);
+
+export const syncRuns = sqliteTable("sync_runs", {
+	id: integer().primaryKey({ autoIncrement: true }),
+	kind: text({ enum: ["backfill", "incremental", "reconcile"] }).notNull(),
+	status: text({ enum: ["running", "ok", "error"] }).notNull(),
+	startedAt: integer({ mode: "timestamp_ms" }).notNull(),
+	finishedAt: integer({ mode: "timestamp_ms" }),
+	tasksUpserted: integer().notNull().default(0),
+	requests: integer().notNull().default(0),
+	error: text(),
+});
