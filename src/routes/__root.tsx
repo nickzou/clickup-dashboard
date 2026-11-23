@@ -6,6 +6,7 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
+import { useEffect } from "react";
 import { Toaster } from "#/components/ui/sonner";
 import { TooltipProvider } from "#/components/ui/tooltip";
 import TanStackQueryDevtools from "#/integrations/tanstack-query/devtools";
@@ -22,15 +23,49 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 			{ charSet: "utf-8" },
 			{ name: "viewport", content: "width=device-width, initial-scale=1" },
 			{ name: "robots", content: "noindex, nofollow" },
+			// Browser chrome color, matching the page background per theme.
+			{
+				name: "theme-color",
+				content: "#ffffff",
+				media: "(prefers-color-scheme: light)",
+			},
+			{
+				name: "theme-color",
+				content: "#09090b",
+				media: "(prefers-color-scheme: dark)",
+			},
+			{ name: "apple-mobile-web-app-title", content: "Overview" },
 			{ title: "Overview" },
 		],
-		links: [{ rel: "stylesheet", href: appCss }],
+		links: [
+			{ rel: "stylesheet", href: appCss },
+			{ rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+			{
+				rel: "icon",
+				href: "/favicon-32.png",
+				sizes: "32x32",
+				type: "image/png",
+			},
+			{ rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+			{ rel: "manifest", href: "/manifest.webmanifest" },
+		],
 		scripts: [{ children: themeInitScript }],
 	}),
 	shellComponent: RootDocument,
 });
 
+// Registers the network-only service worker that makes the app installable.
+// Production only, so it never sits between Vite's dev server and the page.
+function useServiceWorker() {
+	useEffect(() => {
+		if (import.meta.env.PROD && "serviceWorker" in navigator) {
+			navigator.serviceWorker.register("/sw.js").catch(() => {});
+		}
+	}, []);
+}
+
 function RootDocument({ children }: { children: React.ReactNode }) {
+	useServiceWorker();
 	return (
 		<html lang="en" suppressHydrationWarning>
 			<head>
