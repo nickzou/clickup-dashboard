@@ -153,7 +153,72 @@
   }
 }
 
-/* Outside the layers, so it beats the sidebar's own display utilities. */
+/* Outside the layers, so these beat the components' own utilities. */
 [data-big-screen] [data-slot="sidebar"] {
   display: none;
+}
+
+/* Big screen backdrop: soft color fields drifting slowly behind the page.
+   Only transforms animate, so a TV's GPU moves pre-rendered layers instead
+   of repainting. */
+:root {
+  --glow-1: oklch(0.82 0.09 255 / 0.55);
+  --glow-2: oklch(0.85 0.08 300 / 0.45);
+  --glow-3: oklch(0.88 0.08 175 / 0.45);
+  --glow-card: color-mix(in oklab, var(--card) 80%, transparent);
+}
+.dark {
+  --glow-1: oklch(0.5 0.17 260 / 0.6);
+  --glow-2: oklch(0.45 0.16 295 / 0.55);
+  --glow-3: oklch(0.5 0.1 190 / 0.45);
+  --glow-card: color-mix(in oklab, var(--card) 65%, transparent);
+}
+html[data-big-screen] {
+  background: var(--background);
+}
+[data-big-screen] body,
+[data-big-screen] [data-slot="sidebar-inset"] {
+  background: transparent;
+}
+[data-big-screen] [data-slot="card"] {
+  background: var(--glow-card);
+}
+[data-big-screen] body::before,
+[data-big-screen] body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  inset: -25%;
+  pointer-events: none;
+  will-change: transform;
+}
+[data-big-screen] body::before {
+  background:
+    radial-gradient(closest-side at 25% 30%, var(--glow-1), transparent),
+    radial-gradient(closest-side at 75% 70%, var(--glow-2), transparent);
+  animation: glow-drift-a 70s ease-in-out infinite alternate;
+}
+[data-big-screen] body::after {
+  background: radial-gradient(
+    closest-side at 60% 25%,
+    var(--glow-3),
+    transparent
+  );
+  animation: glow-drift-b 90s ease-in-out infinite alternate;
+}
+@keyframes glow-drift-a {
+  to {
+    transform: translate(12%, 8%) rotate(25deg) scale(1.1);
+  }
+}
+@keyframes glow-drift-b {
+  to {
+    transform: translate(-15%, 12%) rotate(-20deg) scale(0.95);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-big-screen] body::before,
+  [data-big-screen] body::after {
+    animation: none;
+  }
 }
