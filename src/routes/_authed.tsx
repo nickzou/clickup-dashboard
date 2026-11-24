@@ -30,7 +30,8 @@ function AuthedLayout() {
 	const title = navItems.find((i) => i.to === pathname)?.label ?? "Overview";
 
 	return (
-		<SidebarProvider>
+		// Starts collapsed to the icon rail; the trigger expands it.
+		<SidebarProvider defaultOpen={false}>
 			<AppSidebar />
 			<SidebarInset>
 				<header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur">
