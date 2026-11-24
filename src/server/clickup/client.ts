@@ -45,6 +45,12 @@ export type ClickUpClient = {
 		schema: T,
 		query?: Query,
 	): Promise<z.infer<T> | null>;
+	// Not retried on network errors or 5xx, which could create twice.
+	post<T extends z.ZodType>(
+		path: string,
+		schema: T,
+		body: unknown,
+	): Promise<z.infer<T>>;
 	readonly requestCount: number;
 };
 
@@ -64,7 +70,10 @@ export function createClickUpClient(
 		schema: T,
 		query: Query,
 		allowMissing: boolean,
+		body?: unknown,
 	): Promise<z.infer<T>> {
+		const method = body === undefined ? "GET" : "POST";
+		const retries = method === "GET" ? RETRY_DELAYS_MS.length : 0;
 		const url = new URL(BASE_URL + path);
 		for (const [k, v] of Object.entries(query)) {
 			if (v !== undefined) url.searchParams.set(k, String(v));
@@ -79,16 +88,21 @@ export function createClickUpClient(
 			try {
 				const timeout = AbortSignal.timeout(30_000);
 				res = await fetch(url, {
-					headers: { Authorization: token },
+					method,
+					headers: {
+						Authorization: token,
+						...(body !== undefined && { "Content-Type": "application/json" }),
+					},
+					body: body === undefined ? undefined : JSON.stringify(body),
 					signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
 				});
 			} catch (err) {
 				if (signal?.aborted) throw err;
-				if (attempt < RETRY_DELAYS_MS.length) {
+				if (attempt < retries) {
 					await sleep(RETRY_DELAYS_MS[attempt]);
 					continue;
 				}
-				throw new ClickUpError(`GET ${path} failed: ${String(err)}`);
+				throw new ClickUpError(`${method} ${path} failed: ${String(err)}`);
 			}
 
 			if (allowMissing && (res.status === 401 || res.status === 404)) {
@@ -103,12 +117,12 @@ export function createClickUpClient(
 				);
 				continue;
 			}
-			if (res.status >= 500 && attempt < RETRY_DELAYS_MS.length) {
+			if (res.status >= 500 && attempt < retries) {
 				await sleep(RETRY_DELAYS_MS[attempt]);
 				continue;
 			}
 			if (!res.ok) {
-				throw new ClickUpError(`GET ${path} returned ${res.status}`);
+				throw new ClickUpError(`${method} ${path} returned ${res.status}`);
 			}
 			return schema.parse(await res.json());
 		}
@@ -116,6 +130,7 @@ export function createClickUpClient(
 
 	return {
 		get: (path, schema, query = {}) => request(path, schema, query, false),
+		post: (path, schema, body) => request(path, schema, {}, false, body),
 		async find(path, schema, query = {}) {
 			try {
 				return await request(path, schema, query, true);

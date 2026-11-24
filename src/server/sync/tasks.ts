@@ -74,6 +74,11 @@ export async function syncTasks(
 // Caps the per-task checks in one reconcile; any left over wait for the next.
 const MAX_DELETE_CHECKS = 200;
 
+// Saves one task straight away, as after creating it here.
+export function saveTask(db: Db, t: ClickUpTask, meId: number) {
+	writePage(db, [t], meId, Date.now());
+}
+
 function writePage(db: Db, page: ClickUpTask[], meId: number, now: number) {
 	db.transaction((tx) => {
 		const previous = new Map(

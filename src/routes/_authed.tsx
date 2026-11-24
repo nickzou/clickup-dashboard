@@ -7,6 +7,7 @@ import {
 import { AppSidebar } from "#/components/app-sidebar";
 import { BigScreenToggle } from "#/components/big-screen-toggle";
 import { navItems, settingsItem } from "#/components/nav";
+import { QuickAddBar, QuickAddButton } from "#/components/quick-add";
 import { SyncButton } from "#/components/sync-status";
 import { Separator } from "#/components/ui/separator";
 import {
@@ -47,11 +48,14 @@ function AuthedLayout() {
 					/>
 					<h1 className="text-base font-semibold big-screen:hidden">{title}</h1>
 					<div className="ml-auto flex items-center gap-1">
+						{/* Quick capture isn't for the TV; phones get the bar below. */}
+						<QuickAddButton className="hidden md:inline-flex big-screen:hidden" />
 						<SyncButton className="hidden big-screen:inline-flex" />
 						<BigScreenToggle />
 					</div>
 				</header>
 				<main className="flex-1 p-4 md:p-6">
+					<QuickAddBar className="mb-4 md:hidden big-screen:hidden" />
 					<Outlet />
 				</main>
 			</SidebarInset>

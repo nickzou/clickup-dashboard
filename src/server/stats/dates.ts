@@ -99,3 +99,34 @@ function timeFormat(timeZone: string) {
 	}
 	return f;
 }
+
+// The instant a wall-clock time ("HH:mm") on a day falls in the zone. Two
+// passes settle the offset, DST changes included.
+export function zonedMs(key: string, time: string, timeZone: string): number {
+	const [y, m, d] = key.split("-").map(Number);
+	const [h, min] = time.split(":").map(Number);
+	const wall = Date.UTC(y, m - 1, d, h, min);
+	let ms = wall;
+	for (let i = 0; i < 2; i++) ms = wall - offset(ms, timeZone);
+	return ms;
+}
+
+function offset(ms: number, timeZone: string) {
+	const p = Object.fromEntries(
+		new Intl.DateTimeFormat("en-US", {
+			timeZone,
+			hourCycle: "h23",
+			year: "numeric",
+			month: "numeric",
+			day: "numeric",
+			hour: "numeric",
+			minute: "numeric",
+		})
+			.formatToParts(ms)
+			.map((x) => [x.type, Number(x.value)]),
+	);
+	return (
+		Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) -
+		Math.floor(ms / 60_000) * 60_000
+	);
+}
