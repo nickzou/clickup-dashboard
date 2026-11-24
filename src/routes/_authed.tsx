@@ -5,8 +5,7 @@ import {
 	useLocation,
 } from "@tanstack/react-router";
 import { AppSidebar } from "#/components/app-sidebar";
-import { navItems } from "#/components/nav";
-import { ThemeToggle } from "#/components/theme-toggle";
+import { navItems, settingsItem } from "#/components/nav";
 import { Separator } from "#/components/ui/separator";
 import {
 	SidebarInset,
@@ -27,7 +26,9 @@ export const Route = createFileRoute("/_authed")({
 
 function AuthedLayout() {
 	const { pathname } = useLocation();
-	const title = navItems.find((i) => i.to === pathname)?.label ?? "Overview";
+	const title =
+		[...navItems, settingsItem].find((i) => i.to === pathname)?.label ??
+		"Overview";
 
 	return (
 		// Starts collapsed to the icon rail; the trigger expands it.
@@ -38,9 +39,6 @@ function AuthedLayout() {
 					<SidebarTrigger className="-ml-1" />
 					<Separator orientation="vertical" className="mr-2 h-4" />
 					<h1 className="text-base font-semibold">{title}</h1>
-					<div className="ml-auto">
-						<ThemeToggle />
-					</div>
 				</header>
 				<main className="flex-1 p-4 md:p-6">
 					<Outlet />

@@ -14,6 +14,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
 import { Route as AuthedDeadlinesRouteImport } from './routes/_authed/deadlines'
 import { Route as AuthedProjectsRouteImport } from './routes/_authed/projects'
+import { Route as AuthedSettingsRouteImport } from './routes/_authed/settings'
 import { Route as AuthedTasksRouteImport } from './routes/_authed/tasks'
 import { Route as AuthedThroughputRouteImport } from './routes/_authed/throughput'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
@@ -42,6 +43,11 @@ const AuthedProjectsRoute = AuthedProjectsRouteImport.update({
   path: '/projects',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedSettingsRoute = AuthedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedTasksRoute = AuthedTasksRouteImport.update({
   id: '/tasks',
   path: '/tasks',
@@ -63,6 +69,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/deadlines': typeof AuthedDeadlinesRoute
   '/projects': typeof AuthedProjectsRoute
+  '/settings': typeof AuthedSettingsRoute
   '/tasks': typeof AuthedTasksRoute
   '/throughput': typeof AuthedThroughputRoute
   '/api/health': typeof ApiHealthRoute
@@ -71,6 +78,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/deadlines': typeof AuthedDeadlinesRoute
   '/projects': typeof AuthedProjectsRoute
+  '/settings': typeof AuthedSettingsRoute
   '/tasks': typeof AuthedTasksRoute
   '/throughput': typeof AuthedThroughputRoute
   '/api/health': typeof ApiHealthRoute
@@ -82,6 +90,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_authed/deadlines': typeof AuthedDeadlinesRoute
   '/_authed/projects': typeof AuthedProjectsRoute
+  '/_authed/settings': typeof AuthedSettingsRoute
   '/_authed/tasks': typeof AuthedTasksRoute
   '/_authed/throughput': typeof AuthedThroughputRoute
   '/api/health': typeof ApiHealthRoute
@@ -94,6 +103,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/deadlines'
     | '/projects'
+    | '/settings'
     | '/tasks'
     | '/throughput'
     | '/api/health'
@@ -102,6 +112,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/deadlines'
     | '/projects'
+    | '/settings'
     | '/tasks'
     | '/throughput'
     | '/api/health'
@@ -112,6 +123,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/_authed/deadlines'
     | '/_authed/projects'
+    | '/_authed/settings'
     | '/_authed/tasks'
     | '/_authed/throughput'
     | '/api/health'
@@ -161,6 +173,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedProjectsRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/settings': {
+      id: '/_authed/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthedSettingsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/tasks': {
       id: '/_authed/tasks'
       path: '/tasks'
@@ -188,6 +207,7 @@ declare module '@tanstack/react-router' {
 interface AuthedRouteChildren {
   AuthedDeadlinesRoute: typeof AuthedDeadlinesRoute
   AuthedProjectsRoute: typeof AuthedProjectsRoute
+  AuthedSettingsRoute: typeof AuthedSettingsRoute
   AuthedTasksRoute: typeof AuthedTasksRoute
   AuthedThroughputRoute: typeof AuthedThroughputRoute
   AuthedIndexRoute: typeof AuthedIndexRoute
@@ -196,6 +216,7 @@ interface AuthedRouteChildren {
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedDeadlinesRoute: AuthedDeadlinesRoute,
   AuthedProjectsRoute: AuthedProjectsRoute,
+  AuthedSettingsRoute: AuthedSettingsRoute,
   AuthedTasksRoute: AuthedTasksRoute,
   AuthedThroughputRoute: AuthedThroughputRoute,
   AuthedIndexRoute: AuthedIndexRoute,

@@ -15,7 +15,7 @@ import {
 	useSidebar,
 } from "#/components/ui/sidebar";
 import { logout } from "#/server/auth";
-import { navItems } from "./nav";
+import { navItems, settingsItem } from "./nav";
 import { SyncStatus } from "./sync-status";
 
 export function AppSidebar() {
@@ -76,6 +76,18 @@ export function AppSidebar() {
 			<SidebarFooter>
 				<SidebarMenu>
 					<SyncStatus />
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							asChild
+							tooltip={settingsItem.label}
+							isActive={pathname === settingsItem.to}
+						>
+							<Link to={settingsItem.to} onClick={() => setOpenMobile(false)}>
+								<settingsItem.icon />
+								<span>{settingsItem.label}</span>
+							</Link>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
 					<SidebarMenuItem>
 						<SidebarMenuButton tooltip="Sign out" onClick={onLogout}>
 							<LogOut />
