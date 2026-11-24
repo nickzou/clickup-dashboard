@@ -37,15 +37,6 @@ const STATUS_OUTCOMES: Record<string, Outcome> = {
 	"social skipped": "excluded",
 };
 
-// A day whose only finished tasks have these statuses keeps a streak alive
-// without adding to it.
-const STREAK_BRIDGES = new Set([
-	"illness skipped",
-	"vacation skipped",
-	"rest skipped",
-	"social skipped",
-]);
-
 // Open statuses where the next step is someone else's: waiting on feedback,
 // a delivery, a blocker. Moving these isn't putting them off, and they don't
 // count toward what's due today.
@@ -74,8 +65,4 @@ export function outcomeOf(status: string, statusType: string): Outcome | null {
 	const known = STATUS_OUTCOMES[status.toLowerCase()];
 	if (known) return known;
 	return FINISHED_TYPES.has(statusType) ? "completed" : null;
-}
-
-export function bridgesStreak(status: string): boolean {
-	return STREAK_BRIDGES.has(status.toLowerCase());
 }

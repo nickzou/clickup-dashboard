@@ -17,7 +17,6 @@ import {
 	CardTitle,
 } from "#/components/ui/card";
 import { Skeleton } from "#/components/ui/skeleton";
-import { plural } from "#/lib/format";
 import { overviewInput, overviewQuery } from "#/server/stats";
 import { comparisonLabel, RANGES } from "#/server/stats/ranges";
 
@@ -72,7 +71,7 @@ function OverviewPage() {
 		<div className="grid grid-cols-1 gap-4 md:gap-6">
 			{filters}
 
-			<div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 				<KpiTile
 					label="Completed"
 					value={kpis.completed.toLocaleString()}
@@ -92,11 +91,6 @@ function OverviewPage() {
 					value={kpis.overdue.toLocaleString()}
 					detail="Open, past due, not waiting on others"
 					tone={kpis.overdue > 0 ? "critical" : undefined}
-				/>
-				<KpiTile
-					label="Current streak"
-					value={plural(kpis.streak, "day")}
-					detail={`Best: ${plural(kpis.bestStreak, "day")}`}
 				/>
 			</div>
 
@@ -190,8 +184,8 @@ function OverviewSkeleton() {
 	return (
 		<div className="grid grid-cols-1 gap-4 md:gap-6">
 			<Skeleton className="h-9 w-80 max-w-full" />
-			<div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-				{[0, 1, 2].map((i) => (
+			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+				{[0, 1].map((i) => (
 					<Skeleton key={i} className="h-32 rounded-xl" />
 				))}
 			</div>

@@ -20,7 +20,7 @@ import {
 	tasks,
 } from "../db/schema";
 import { addDays, dayKey, dayRange, weekStart } from "./dates";
-import { bridgesStreak, isWaiting, outcomeOf, POINTS } from "./outcomes";
+import { isWaiting, outcomeOf, POINTS } from "./outcomes";
 import { RANGES, type RangeDef, type RangeKey } from "./ranges";
 
 const DONE_TYPES = ["done", "closed"];
@@ -118,8 +118,6 @@ export function getOverviewStats(
 	const perDay = new Map<string, number>();
 	const perSpaceInRange = new Map<string, number>();
 	const perListInRange = new Map<string, { spaceId: string; points: number }>();
-	// Days with a skipped task, which keep a streak alive.
-	const bridgeDays = new Set<string>();
 	let completedPrev = 0;
 	// Completed + partial + not done in range: the completion rate's base.
 	let resolvedInRange = 0;
@@ -139,10 +137,7 @@ export function getOverviewStats(
 		const key = completionDay(c.markedAt, c.due, tz);
 		const inRange = key >= from && key <= today;
 		if (inRange) outcomes[outcome]++;
-		if (outcome === "excluded") {
-			if (bridgesStreak(c.status)) bridgeDays.add(key);
-			continue;
-		}
+		if (outcome === "excluded") continue;
 		const points = POINTS[outcome];
 		if (inRange) {
 			resolvedInRange++;
@@ -364,7 +359,6 @@ export function getOverviewStats(
 			open: open.length,
 			overdue,
 			dueToday,
-			...streaks(perDay, bridgeDays, today),
 		},
 		series,
 		outcomes,
@@ -499,36 +493,4 @@ function putOffEvents(db: Db, scope: ReturnType<typeof and>, tz: string) {
 		});
 	}
 	return [...events.values()];
-}
-
-// A streak is consecutive days with points. A skipped day (illness,
-// vacation…) with no points bridges it: the streak survives but doesn't grow.
-// The current streak ends today, or yesterday if nothing is done yet today
-// (it isn't broken until the day ends).
-function streaks(
-	perDay: Map<string, number>,
-	bridgeDays: Set<string>,
-	today: string,
-) {
-	const counts = (k: string) => (perDay.get(k) ?? 0) > 0;
-	const keeps = (k: string) => counts(k) || bridgeDays.has(k);
-
-	let current = 0;
-	let k = counts(today) ? today : addDays(today, -1);
-	while (keeps(k)) {
-		if (counts(k)) current++;
-		k = addDays(k, -1);
-	}
-
-	const days = [...perDay.keys(), ...bridgeDays].sort();
-	let best = 0;
-	let run = 0;
-	if (days.length) {
-		for (const key of dayRange(days[0], today)) {
-			if (counts(key)) run++;
-			else if (!bridgeDays.has(key)) run = 0;
-			best = Math.max(best, run);
-		}
-	}
-	return { streak: current, bestStreak: best };
 }
