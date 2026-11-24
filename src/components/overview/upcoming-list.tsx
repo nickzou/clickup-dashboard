@@ -48,14 +48,15 @@ export function UpcomingList({ tasks }: { tasks: UpcomingTask[] }) {
 	return (
 		<div className="grid grid-cols-1 gap-3">
 			{groups.map((g) => (
-				<section key={g.key} className="grid grid-cols-1 gap-1.5">
+				// A rail in the Time of Day color runs down each group, so it
+				// can't be mistaken for the round status dots on the tasks.
+				<section
+					key={g.key}
+					className="grid grid-cols-1 gap-1.5 border-l-2 border-border pl-3"
+					style={g.color ? { borderColor: g.color } : undefined}
+				>
 					{g.name && (
 						<h3 className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase">
-							<span
-								className="size-2 shrink-0 rounded-full bg-muted-foreground"
-								style={g.color ? { background: g.color } : undefined}
-								aria-hidden
-							/>
 							{g.name}
 							<span className="tabular-nums">· {g.items.length}</span>
 						</h3>
@@ -63,6 +64,16 @@ export function UpcomingList({ tasks }: { tasks: UpcomingTask[] }) {
 					<ul className="grid grid-cols-1 gap-1.5">
 						{g.items.map((t) => (
 							<li key={t.id} className="flex items-center gap-2 text-sm">
+								{/* The task's ClickUp status, in its ClickUp color. */}
+								<span
+									className="size-2 shrink-0 rounded-full bg-muted-foreground"
+									style={
+										t.statusColor ? { background: t.statusColor } : undefined
+									}
+									title={t.status}
+									role="img"
+									aria-label={`Status: ${t.status}`}
+								/>
 								<a
 									href={t.url}
 									target="_blank"
