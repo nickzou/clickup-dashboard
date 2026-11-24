@@ -70,3 +70,32 @@ export function dayRange(from: string, to: string): string[] {
 	for (let k = from; k <= to; k = addDays(k, 1)) out.push(k);
 	return out;
 }
+
+const timeFormats = new Map<string, Intl.DateTimeFormat>();
+
+// "h:mm AM" in the time zone, or null for 4:00 AM: ClickUp stores a date
+// without a time as 4 AM local.
+export function timeOfDay(ms: number, timeZone: string): string | null {
+	const label = timeFormat(timeZone).format(ms);
+	return label === "4:00 AM" ? null : label;
+}
+
+// "10:00 AM – 10:30 AM": AM/PM on both ends, even when they match, so
+// ranges line up in a column.
+export function timeRange(from: number, to: number, timeZone: string): string {
+	const f = timeFormat(timeZone);
+	return `${f.format(from)} – ${f.format(to)}`;
+}
+
+function timeFormat(timeZone: string) {
+	let f = timeFormats.get(timeZone);
+	if (!f) {
+		f = new Intl.DateTimeFormat("en-US", {
+			timeZone,
+			hour: "numeric",
+			minute: "2-digit",
+		});
+		timeFormats.set(timeZone, f);
+	}
+	return f;
+}

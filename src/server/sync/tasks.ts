@@ -150,8 +150,28 @@ function toRow(t: ClickUpTask, meId: number, now: number) {
 		// Lists attach every field to every task; keep only the ones set.
 		customFields: t.custom_fields
 			.filter((f) => f.value !== undefined && f.value !== null)
-			.map((f) => ({ id: f.id, name: f.name, type: f.type, value: f.value })),
+			.map((f) => ({
+				id: f.id,
+				name: f.name,
+				type: f.type,
+				value: f.value,
+				...(f.type === "drop_down" && { option: dropDownOption(f) }),
+			})),
 		syncedAt: now,
 		deletedAt: null,
+	};
+}
+
+// A drop-down's value is the chosen option's orderindex (or, in newer
+// payloads, its id). Keeps the option's name and color with the task.
+function dropDownOption(f: ClickUpTask["custom_fields"][number]) {
+	const option = f.type_config?.options?.find(
+		(o) => o.orderindex === f.value || o.id === f.value,
+	);
+	if (!option?.name || option.orderindex === undefined) return undefined;
+	return {
+		name: option.name,
+		color: option.color ?? null,
+		order: option.orderindex,
 	};
 }

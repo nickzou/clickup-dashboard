@@ -43,6 +43,23 @@ export const folder = z.object({
 });
 export const foldersResponse = z.object({ folders: z.array(folder) });
 
+// Drop-down options; other field types' config is ignored.
+const fieldTypeConfig = z
+	.object({
+		options: z
+			.array(
+				z.object({
+					id: z.string(),
+					name: z.string().optional(),
+					color: z.string().nullish(),
+					orderindex: z.coerce.number().optional(),
+				}),
+			)
+			.optional(),
+	})
+	.optional()
+	.catch(undefined);
+
 export const task = z.object({
 	id: z.string(),
 	name: z.string(),
@@ -75,6 +92,7 @@ export const task = z.object({
 				name: z.string(),
 				type: z.string(),
 				value: z.unknown().optional(),
+				type_config: fieldTypeConfig,
 			}),
 		)
 		.default([]),
@@ -95,4 +113,16 @@ export const timeEntry = z.object({
 });
 export const timeEntriesResponse = z.object({
 	data: z.array(timeEntry).default([]),
+});
+
+// Workspace-level custom field definitions.
+export const fieldsResponse = z.object({
+	fields: z.array(
+		z.object({
+			id: z.string(),
+			name: z.string(),
+			type: z.string(),
+			type_config: fieldTypeConfig,
+		}),
+	),
 });

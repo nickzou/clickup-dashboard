@@ -34,6 +34,8 @@ export type CustomFieldValue = {
 	name: string;
 	type: string;
 	value: unknown;
+	// Drop-downs: the chosen option, resolved at sync time.
+	option?: FieldOption;
 };
 
 export const tasks = sqliteTable(
@@ -92,6 +94,16 @@ export const taskDueChanges = sqliteTable(
 	},
 	(t) => [index("task_due_changes_task_idx").on(t.taskId)],
 );
+
+// Workspace custom field definitions, for drop-down option names and colors.
+export type FieldOption = { name: string; color: string | null; order: number };
+export const customFields = sqliteTable("custom_fields", {
+	id: text().primaryKey(),
+	name: text().notNull(),
+	type: text().notNull(),
+	options: text({ mode: "json" }).$type<FieldOption[]>().notNull(),
+	syncedAt: integer().notNull(),
+});
 
 // Status changes, recorded the same way: from the first sync that sees them.
 export const taskStatusChanges = sqliteTable(

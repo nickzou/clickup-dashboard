@@ -12,14 +12,23 @@ import {
 	sql,
 } from "drizzle-orm";
 import type { Db } from "../db/client";
+import type { FieldOption } from "../db/schema";
 import {
+	customFields,
 	lists,
 	spaces,
 	taskDueChanges,
 	taskStatusChanges,
 	tasks,
 } from "../db/schema";
-import { addDays, dayKey, dayRange, weekStart } from "./dates";
+import {
+	addDays,
+	dayKey,
+	dayRange,
+	timeOfDay,
+	timeRange,
+	weekStart,
+} from "./dates";
 import { isWaiting, outcomeOf, POINTS } from "./outcomes";
 import { RANGES, type RangeDef, type RangeKey } from "./ranges";
 
@@ -365,11 +374,117 @@ export function getOverviewStats(
 		heatmap,
 		bySpace,
 		waiting: waitingTasks(db, open, listNames, tz),
+		upcoming: upcomingToday(db, scope, tz, today, now),
 		spaces: [...spaceNames].map(([id, name]) => ({ id, name })),
 	};
 }
 
 export type OverviewStats = ReturnType<typeof getOverviewStats>;
+
+const TIME_OF_DAY = "time of day";
+
+// Today's open tasks, in the order they'll happen: by the Time of Day field,
+// then start time, then due time. Waiting tasks have their own card.
+function upcomingToday(
+	db: Db,
+	scope: ReturnType<typeof and>,
+	tz: string,
+	today: string,
+	now: number,
+) {
+	const rows = db
+		.select({
+			id: tasks.id,
+			name: tasks.name,
+			url: tasks.url,
+			status: tasks.status,
+			statusColor: tasks.statusColor,
+			due: tasks.dueDate,
+			start: tasks.startDate,
+			customFields: tasks.customFields,
+		})
+		.from(tasks)
+		.where(
+			and(
+				scope,
+				notInArray(tasks.statusType, DONE_TYPES),
+				gte(tasks.dueDate, now - 2 * DAY_MS),
+				lte(tasks.dueDate, now + 2 * DAY_MS),
+			),
+		)
+		.all()
+		.filter(
+			(t) =>
+				t.due !== null &&
+				dayKey(t.due, tz) === today &&
+				!isWaiting(t.status) &&
+				!outcomeOf(t.status, "open"),
+		);
+
+	// Option names and colors from the field definitions; failing that, as
+	// stored with any task that has the option.
+	const knownOptions = new Map<string, FieldOption>();
+	for (const r of db.all<{ key: string; option: string }>(
+		sql`select distinct json_extract(f.value, '$.id') || ':' || json_extract(f.value, '$.value') as key, json_extract(f.value, '$.option') as option from ${tasks}, json_each(${tasks.customFields}) f where lower(json_extract(f.value, '$.name')) = ${TIME_OF_DAY} and json_extract(f.value, '$.option') is not null`,
+	)) {
+		knownOptions.set(r.key, JSON.parse(r.option));
+	}
+	for (const f of db.select().from(customFields).all()) {
+		for (const o of f.options) knownOptions.set(`${f.id}:${o.order}`, o);
+	}
+
+	return rows
+		.map((t) => {
+			const field = t.customFields.find(
+				(f) => f.name.toLowerCase() === TIME_OF_DAY,
+			);
+			const order = typeof field?.value === "number" ? field.value : null;
+			const option = field
+				? (knownOptions.get(`${field.id}:${field.value}`) ?? field.option)
+				: undefined;
+			return {
+				id: t.id,
+				name: t.name,
+				url: t.url,
+				status: t.status,
+				statusColor: t.statusColor,
+				timeOfDay:
+					order === null
+						? null
+						: {
+								// Null until a sync has seen the option's name.
+								name: option?.name ?? null,
+								color: option?.color ?? null,
+								order,
+							},
+				// Dates without a time (4 AM) sort after timed ones.
+				start: t.start !== null && timeOfDay(t.start, tz) ? t.start : null,
+				due: t.due !== null && timeOfDay(t.due, tz) ? t.due : null,
+				time: timeLabel(t.start, t.due, tz),
+			};
+		})
+		.sort(
+			(a, b) =>
+				last(a.timeOfDay?.order) - last(b.timeOfDay?.order) ||
+				last(a.start) - last(b.start) ||
+				last(a.due) - last(b.due) ||
+				a.name.localeCompare(b.name),
+		)
+		.map(({ start, due, ...t }) => t);
+}
+
+// Start to due when both have a time, else whichever has one.
+function timeLabel(start: number | null, due: number | null, tz: string) {
+	const startTime = start !== null ? timeOfDay(start, tz) : null;
+	const dueTime = due !== null ? timeOfDay(due, tz) : null;
+	if (startTime && dueTime && start !== null && due !== null && due > start) {
+		return timeRange(start, due, tz);
+	}
+	return startTime ?? dueTime;
+}
+
+// Missing values sort last.
+const last = (n: number | null | undefined) => n ?? Number.MAX_SAFE_INTEGER;
 
 // Open tasks waiting on someone else, soonest check-in (due date) first.
 // Waiting since the last recorded move into the current status; for tasks

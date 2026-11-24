@@ -9,6 +9,7 @@ import { userResponse } from "../clickup/schemas";
 import { type Db, getDb } from "../db/client";
 import { syncRuns, tasks } from "../db/schema";
 import { env } from "../env";
+import { syncCustomFields } from "./fields";
 import { syncHierarchy, syncMissingParents } from "./hierarchy";
 import { syncTasks } from "./tasks";
 import { syncTimeEntries } from "./time-entries";
@@ -111,6 +112,8 @@ async function run(db: Db, kind: SyncKind) {
 		await syncHierarchy(db, c, CLICKUP_TEAM_ID, {
 			includeArchived: kind !== "incremental",
 		});
+
+		await syncCustomFields(db, c, CLICKUP_TEAM_ID);
 
 		const cursor =
 			kind === "incremental"

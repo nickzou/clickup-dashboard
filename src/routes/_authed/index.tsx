@@ -8,6 +8,7 @@ import { Heatmap } from "#/components/overview/heatmap";
 import { KpiTile } from "#/components/overview/kpi-tile";
 import { OutcomeBreakdown } from "#/components/overview/outcome-breakdown";
 import { SpaceBreakdown } from "#/components/overview/space-breakdown";
+import { UpcomingList } from "#/components/overview/upcoming-list";
 import { WaitingList } from "#/components/overview/waiting-list";
 import {
 	Card,
@@ -76,7 +77,7 @@ function OverviewPage() {
 		<div className="grid grid-cols-1 gap-4 md:gap-6">
 			{filters}
 
-			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+			<div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)]">
 				<KpiTile
 					label="Completed"
 					value={kpis.completed.toLocaleString()}
@@ -91,6 +92,19 @@ function OverviewPage() {
 							: `${Math.round(kpis.completionRate * 100)}% of resolved tasks done`
 					}
 				/>
+				<Card className="gap-3">
+					<CardHeader>
+						<CardDescription>Upcoming</CardDescription>
+						<CardTitle className="text-sm font-normal text-muted-foreground">
+							{data.upcoming.length > 0
+								? `${data.upcoming.length} left today`
+								: "Clear for today"}
+						</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<UpcomingList tasks={data.upcoming} />
+					</CardContent>
+				</Card>
 				<KpiTile
 					label="Overdue"
 					value={kpis.overdue.toLocaleString()}
@@ -189,8 +203,8 @@ function OverviewSkeleton() {
 	return (
 		<div className="grid grid-cols-1 gap-4 md:gap-6">
 			<Skeleton className="h-9 w-80 max-w-full" />
-			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-				{[0, 1].map((i) => (
+			<div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)]">
+				{[0, 1, 2].map((i) => (
 					<Skeleton key={i} className="h-32 rounded-xl" />
 				))}
 			</div>
