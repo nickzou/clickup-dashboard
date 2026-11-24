@@ -7,6 +7,7 @@ import {
 import { AppSidebar } from "#/components/app-sidebar";
 import { BigScreenToggle } from "#/components/big-screen-toggle";
 import { navItems, settingsItem } from "#/components/nav";
+import { SyncButton } from "#/components/sync-status";
 import { Separator } from "#/components/ui/separator";
 import {
 	SidebarInset,
@@ -43,7 +44,8 @@ function AuthedLayout() {
 						className="mr-2 h-4 big-screen:hidden"
 					/>
 					<h1 className="text-base font-semibold">{title}</h1>
-					<div className="ml-auto">
+					<div className="ml-auto flex items-center gap-1">
+						<SyncButton className="hidden big-screen:inline-flex" />
 						<BigScreenToggle />
 					</div>
 				</header>

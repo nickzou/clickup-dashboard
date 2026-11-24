@@ -3,7 +3,13 @@ import { useServerFn } from "@tanstack/react-start";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
+import { Button } from "#/components/ui/button";
 import { SidebarMenuButton, SidebarMenuItem } from "#/components/ui/sidebar";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "#/components/ui/tooltip";
 import { cn } from "#/lib/utils";
 import { getSyncStatus, triggerSync } from "#/server/sync-status";
 
@@ -20,7 +26,9 @@ function ago(ms: number) {
 	return relative.format(Math.round(hours / 24), "day");
 }
 
-export function SyncStatus() {
+// Sync state and a trigger, shared by the sidebar item and the big screen
+// header button.
+function useSync() {
 	const queryClient = useQueryClient();
 	const trigger = useServerFn(triggerSync);
 	const { data } = useQuery({
@@ -30,18 +38,6 @@ export function SyncStatus() {
 		refetchInterval: (q) => (q.state.data?.running ? 3_000 : 60_000),
 	});
 
-	// When a run finishes, refresh every data query so charts pick it up.
-	const wasRunning = useRef(false);
-	useEffect(() => {
-		const running = Boolean(data?.running);
-		if (wasRunning.current && !running) {
-			void queryClient.invalidateQueries({
-				predicate: (q) => q.queryKey[0] !== syncStatusKey[0],
-			});
-		}
-		wasRunning.current = running;
-	}, [data?.running, queryClient]);
-
 	async function onSync() {
 		const { started } = await trigger();
 		if (!started) toast.info("A sync is already running.");
@@ -49,7 +45,7 @@ export function SyncStatus() {
 	}
 
 	const running = data?.running;
-	const failed = data?.tokenRejected || (data?.lastError && !running);
+	const failed = Boolean(data?.tokenRejected || (data?.lastError && !running));
 	const label = running
 		? running.kind === "backfill"
 			? `First sync… ${running.progress.toLocaleString()} tasks`
@@ -67,6 +63,25 @@ export function SyncStatus() {
 			: data
 				? `${data.taskCount.toLocaleString()} tasks`
 				: undefined;
+
+	return { data, running, failed, label, detail, onSync };
+}
+
+export function SyncStatus() {
+	const queryClient = useQueryClient();
+	const { data, running, failed, label, detail, onSync } = useSync();
+
+	// When a run finishes, refresh every data query so charts pick it up.
+	const wasRunning = useRef(false);
+	useEffect(() => {
+		const running = Boolean(data?.running);
+		if (wasRunning.current && !running) {
+			void queryClient.invalidateQueries({
+				predicate: (q) => q.queryKey[0] !== syncStatusKey[0],
+			});
+		}
+		wasRunning.current = running;
+	}, [data?.running, queryClient]);
 
 	return (
 		<SidebarMenuItem>
@@ -91,5 +106,32 @@ export function SyncStatus() {
 				</div>
 			</SidebarMenuButton>
 		</SidebarMenuItem>
+	);
+}
+
+// Big screen view hides the sidebar, so the header gets a sync button.
+export function SyncButton({ className }: { className?: string }) {
+	const { running, failed, label, detail, onSync } = useSync();
+	const text = detail ? `${label} · ${detail}` : label;
+	return (
+		<Tooltip>
+			<TooltipTrigger asChild>
+				<Button
+					variant="ghost"
+					size="icon"
+					aria-label={text}
+					disabled={Boolean(running)}
+					onClick={onSync}
+					className={className}
+				>
+					{failed ? (
+						<AlertTriangle className="text-destructive" />
+					) : (
+						<RefreshCw className={cn(running && "animate-spin")} />
+					)}
+				</Button>
+			</TooltipTrigger>
+			<TooltipContent>{text}</TooltipContent>
+		</Tooltip>
 	);
 }
