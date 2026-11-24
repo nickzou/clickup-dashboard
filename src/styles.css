@@ -5,6 +5,7 @@
 @import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant big-screen (&:where([data-big-screen] *));
 
 :root {
   --background: oklch(1 0 0);
@@ -144,4 +145,15 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
+  /* Big screen view: the desktop layout (about 80rem wide, see the
+     big-screen: grid variants) scaled to fill the screen's width, whatever
+     width the TV's browser reports. */
+  html[data-big-screen] {
+    font-size: max(12px, calc(100vw / 82));
+  }
+}
+
+/* Outside the layers, so it beats the sidebar's own display utilities. */
+[data-big-screen] [data-slot="sidebar"] {
+  display: none;
 }

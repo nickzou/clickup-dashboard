@@ -10,6 +10,7 @@ import { useEffect } from "react";
 import { Toaster } from "#/components/ui/sonner";
 import { TooltipProvider } from "#/components/ui/tooltip";
 import TanStackQueryDevtools from "#/integrations/tanstack-query/devtools";
+import { bigScreenInitScript } from "#/lib/big-screen";
 import { themeInitScript } from "#/lib/theme";
 import appCss from "#/styles.css?url";
 
@@ -49,7 +50,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 			{ rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
 			{ rel: "manifest", href: "/manifest.webmanifest" },
 		],
-		scripts: [{ children: themeInitScript }],
+		scripts: [{ children: themeInitScript }, { children: bigScreenInitScript }],
 	}),
 	shellComponent: RootDocument,
 });

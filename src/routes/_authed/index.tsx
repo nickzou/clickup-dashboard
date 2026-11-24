@@ -17,6 +17,7 @@ import {
 	CardTitle,
 } from "#/components/ui/card";
 import { Skeleton } from "#/components/ui/skeleton";
+import { BIG_SCREEN_REFRESH_MS, useBigScreen } from "#/lib/big-screen";
 import { overviewInput, overviewQuery } from "#/server/stats";
 import { comparisonLabel, RANGES } from "#/server/stats/ranges";
 
@@ -32,7 +33,11 @@ export const Route = createFileRoute("/_authed/")({
 function OverviewPage() {
 	const search = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
-	const { data } = useSuspenseQuery(overviewQuery(search));
+	const { on: bigScreen } = useBigScreen();
+	const { data } = useSuspenseQuery({
+		...overviewQuery(search),
+		refetchInterval: bigScreen ? BIG_SCREEN_REFRESH_MS : false,
+	});
 	const { kpis } = data;
 	const range = RANGES[search.range];
 	const bySpace = data.bySpace.length ? (
@@ -94,8 +99,8 @@ function OverviewPage() {
 				/>
 			</div>
 
-			<div className="grid grid-cols-1 gap-4 md:gap-6 xl:grid-cols-3">
-				<Card className="xl:col-span-2">
+			<div className="grid grid-cols-1 gap-4 md:gap-6 xl:grid-cols-3 big-screen:grid-cols-3">
+				<Card className="xl:col-span-2 big-screen:col-span-2">
 					<CardHeader>
 						<CardTitle>Completions</CardTitle>
 						<CardDescription>
@@ -147,13 +152,13 @@ function OverviewPage() {
 				</div>
 			</div>
 
-			<div className="grid grid-cols-1 items-start gap-4 md:gap-6 xl:grid-cols-3">
+			<div className="grid grid-cols-1 items-start gap-4 md:gap-6 xl:grid-cols-3 big-screen:grid-cols-3">
 				{/* On Today the Completions card already shows the space breakdown. */}
 				<Card
 					className={
 						data.bucket === "space"
-							? "min-w-0 xl:col-span-3"
-							: "min-w-0 xl:col-span-2"
+							? "min-w-0 xl:col-span-3 big-screen:col-span-3"
+							: "min-w-0 xl:col-span-2 big-screen:col-span-2"
 					}
 				>
 					<CardHeader>
