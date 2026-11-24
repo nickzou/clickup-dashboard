@@ -96,7 +96,14 @@ export const taskDueChanges = sqliteTable(
 );
 
 // Workspace custom field definitions, for drop-down option names and colors.
-export type FieldOption = { name: string; color: string | null; order: number };
+export type FieldOption = {
+	// ClickUp's id for the option, needed to set it. Missing on rows from
+	// before it was kept.
+	id?: string;
+	name: string;
+	color: string | null;
+	order: number;
+};
 export const customFields = sqliteTable("custom_fields", {
 	id: text().primaryKey(),
 	name: text().notNull(),

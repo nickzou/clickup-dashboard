@@ -95,7 +95,7 @@ function QuickAddDialog({ children }: { children: ReactNode }) {
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			{children}
-			<DialogContent className="top-[10%] translate-y-0 sm:top-[20%]">
+			<DialogContent className="top-[10%] translate-y-0 sm:top-[20%] md:max-w-2xl">
 				{open && <QuickAddForm onDone={() => setOpen(false)} />}
 			</DialogContent>
 		</Dialog>
@@ -118,6 +118,8 @@ function QuickAddForm({ onDone }: { onDone: () => void }) {
 	// Due today until changed; "" once cleared.
 	const [dueDate, setDueDate] = useState<string>();
 	const [dueTime, setDueTime] = useState("");
+	// Unset unless picked.
+	const [timeOfDay, setTimeOfDay] = useState("");
 	const [saving, setSaving] = useState(false);
 	const selected = listId ?? data?.defaultId ?? undefined;
 	const due = dueDate ?? data?.today ?? "";
@@ -145,6 +147,7 @@ function QuickAddForm({ onDone }: { onDone: () => void }) {
 					name,
 					notes: notes || undefined,
 					listId: selected,
+					timeOfDay: timeOfDay || undefined,
 					start,
 					due: end,
 				},
@@ -206,7 +209,7 @@ function QuickAddForm({ onDone }: { onDone: () => void }) {
 					rows={4}
 				/>
 			</div>
-			<div className="grid grid-cols-1 gap-4">
+			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 				<DateTimeField
 					id="quick-add-start"
 					label="Start"
@@ -226,30 +229,61 @@ function QuickAddForm({ onDone }: { onDone: () => void }) {
 					onTime={setDueTime}
 				/>
 				{backwards && (
-					<p className="text-sm text-destructive-foreground">
+					<p className="text-sm text-destructive-foreground md:col-span-2">
 						The start is after the due date.
 					</p>
 				)}
 			</div>
-			<div className="grid gap-2">
-				<Label htmlFor="quick-add-list">List</Label>
-				<Select value={selected} onValueChange={setListId}>
-					<SelectTrigger id="quick-add-list" className="w-full">
-						<SelectValue placeholder={data ? "Pick a list" : "Loading…"} />
-					</SelectTrigger>
-					<SelectContent>
-						{groupBySpace(data?.lists ?? []).map(([space, items]) => (
-							<SelectGroup key={space}>
-								<SelectLabel>{space}</SelectLabel>
-								{items.map((l) => (
-									<SelectItem key={l.id} value={l.id}>
-										{l.folder ? `${l.folder} › ${l.name}` : l.name}
+			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+				{(data?.timeOfDay.length ?? 0) > 0 && (
+					<div className="grid gap-2">
+						<Label htmlFor="quick-add-time-of-day">Time of Day</Label>
+						<Select
+							value={timeOfDay || NONE}
+							onValueChange={(v) => setTimeOfDay(v === NONE ? "" : v)}
+						>
+							<SelectTrigger
+								id="quick-add-time-of-day"
+								className={cn("w-full", !timeOfDay && "text-muted-foreground")}
+							>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value={NONE}>None</SelectItem>
+								{data?.timeOfDay.map((o) => (
+									<SelectItem key={o.id} value={o.id}>
+										<span
+											className="size-2 rounded-full bg-muted-foreground"
+											style={o.color ? { background: o.color } : undefined}
+											aria-hidden
+										/>
+										{o.name}
 									</SelectItem>
 								))}
-							</SelectGroup>
-						))}
-					</SelectContent>
-				</Select>
+							</SelectContent>
+						</Select>
+					</div>
+				)}
+				<div className="grid gap-2 md:col-start-2">
+					<Label htmlFor="quick-add-list">List</Label>
+					<Select value={selected} onValueChange={setListId}>
+						<SelectTrigger id="quick-add-list" className="w-full">
+							<SelectValue placeholder={data ? "Pick a list" : "Loading…"} />
+						</SelectTrigger>
+						<SelectContent>
+							{groupBySpace(data?.lists ?? []).map(([space, items]) => (
+								<SelectGroup key={space}>
+									<SelectLabel>{space}</SelectLabel>
+									{items.map((l) => (
+										<SelectItem key={l.id} value={l.id}>
+											{l.folder ? `${l.folder} › ${l.name}` : l.name}
+										</SelectItem>
+									))}
+								</SelectGroup>
+							))}
+						</SelectContent>
+					</Select>
+				</div>
 			</div>
 			<DialogFooter>
 				<Button
@@ -319,6 +353,27 @@ function DateTimeField({
 						</Button>
 					</PopoverTrigger>
 					<PopoverContent className="w-auto p-0" align="start">
+						{today && (
+							<div className="grid grid-cols-2 gap-2 border-b p-3">
+								{[
+									{ label: "Today", key: today },
+									{ label: "Tomorrow", key: nextDay(today) },
+								].map((q) => (
+									<Button
+										key={q.label}
+										type="button"
+										size="sm"
+										variant={date === q.key ? "secondary" : "outline"}
+										onClick={() => {
+											onDate(q.key);
+											setOpen(false);
+										}}
+									>
+										{q.label}
+									</Button>
+								))}
+							</div>
+						)}
 						<Calendar
 							mode="single"
 							selected={selected}
@@ -341,6 +396,9 @@ function DateTimeField({
 		</div>
 	);
 }
+
+// Select needs a value for "nothing picked".
+const NONE = "none";
 
 // A searchable time list. Typing narrows it ("930", "9:30p", "2pm"), and a
 // time between the 15-minute steps ("9:40") is offered as its own entry.
@@ -495,12 +553,14 @@ const dayFormat = new Intl.DateTimeFormat("en-US", {
 
 function dayLabel(key: string, today: string | undefined) {
 	if (key === today) return "Today";
-	if (today) {
-		const t = fromKey(today);
-		t.setDate(t.getDate() + 1);
-		if (key === toKey(t)) return "Tomorrow";
-	}
+	if (today && key === nextDay(today)) return "Tomorrow";
 	return dayFormat.format(fromKey(key));
+}
+
+function nextDay(key: string) {
+	const d = fromKey(key);
+	d.setDate(d.getDate() + 1);
+	return toKey(d);
 }
 
 function groupBySpace(lists: CaptureList[]) {

@@ -5,7 +5,7 @@ import { requireAuth } from "./auth";
 import { createClickUpClient } from "./clickup/client";
 import { task, userResponse } from "./clickup/schemas";
 import { getDb } from "./db/client";
-import { folders, lists, spaces } from "./db/schema";
+import { customFields, folders, lists, spaces } from "./db/schema";
 import { env } from "./env";
 import { dayKey, zonedMs } from "./stats/dates";
 import { saveTask } from "./sync/tasks";
@@ -17,6 +17,23 @@ const DEFAULT_LIST = "inbox";
 export type CaptureList = Awaited<
 	ReturnType<typeof getCaptureLists>
 >["lists"][number];
+
+const TIME_OF_DAY = "time of day";
+
+// The workspace's Time of Day field and its settable options, if synced.
+function timeOfDayField() {
+	const field = getDb()
+		.select()
+		.from(customFields)
+		.all()
+		.find((f) => f.name.toLowerCase() === TIME_OF_DAY);
+	if (!field) return null;
+	const options = field.options
+		.filter((o) => o.id)
+		.sort((a, b) => a.order - b.order)
+		.map((o) => ({ id: o.id as string, name: o.name, color: o.color }));
+	return options.length ? { id: field.id, options } : null;
+}
 
 // Every open list, by space then folder, for the modal's list picker.
 export const getCaptureLists = createServerFn({ method: "GET" })
@@ -43,6 +60,7 @@ export const getCaptureLists = createServerFn({ method: "GET" })
 		return {
 			lists: rows,
 			defaultId: inbox?.id ?? rows[0]?.id ?? null,
+			timeOfDay: timeOfDayField()?.options ?? [],
 			// New tasks are due today unless changed.
 			today: dayKey(Date.now(), env().TZ),
 		};
@@ -68,6 +86,7 @@ const captureInput = z.object({
 	name: z.string().trim().min(1).max(500),
 	notes: z.string().trim().max(10_000).optional(),
 	listId: z.string().regex(/^\d+$/),
+	timeOfDay: z.string().optional(),
 	start: when.optional(),
 	due: when.optional(),
 });
@@ -97,6 +116,14 @@ export const createTask = createServerFn({ method: "POST" })
 			.get();
 		if (!list) throw new Error("That list isn't synced.");
 
+		const field = data.timeOfDay ? timeOfDayField() : null;
+		if (
+			data.timeOfDay &&
+			!field?.options.some((o) => o.id === data.timeOfDay)
+		) {
+			throw new Error("That Time of Day option isn't synced.");
+		}
+
 		const client = createClickUpClient(CLICKUP_TOKEN);
 		meId ??= (await client.get("/user", userResponse)).user.id;
 		const created = await client.post(`/list/${list.id}/task`, createdTask, {
@@ -108,6 +135,9 @@ export const createTask = createServerFn({ method: "POST" })
 				start_date_time: start.hasTime,
 			}),
 			...(due && { due_date: due.ms, due_date_time: due.hasTime }),
+			...(field && {
+				custom_fields: [{ id: field.id, value: data.timeOfDay }],
+			}),
 		});
 		// Read back in the shape the sync stores. If that fails, the task
 		// exists anyway and the next sync picks it up.

@@ -19,7 +19,14 @@ export async function syncCustomFields(
 			const options: FieldOption[] = (f.type_config?.options ?? []).flatMap(
 				(o) =>
 					o.name && o.orderindex !== undefined
-						? [{ name: o.name, color: o.color ?? null, order: o.orderindex }]
+						? [
+								{
+									id: o.id,
+									name: o.name,
+									color: o.color ?? null,
+									order: o.orderindex,
+								},
+							]
 						: [],
 			);
 			tx.insert(customFields)
