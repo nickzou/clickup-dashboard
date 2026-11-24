@@ -1,11 +1,18 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CalendarIcon, Clock, Plus } from "lucide-react";
+import { CalendarIcon, Check, ChevronDown, Clock, Plus } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { syncStatusKey } from "#/components/sync-status";
 import { Button } from "#/components/ui/button";
 import { Calendar } from "#/components/ui/calendar";
+import {
+	Command,
+	CommandEmpty,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "#/components/ui/command";
 import {
 	Dialog,
 	DialogContent,
@@ -324,44 +331,148 @@ function DateTimeField({
 						/>
 					</PopoverContent>
 				</Popover>
-				<Select
-					value={time || NO_TIME}
-					onValueChange={(v) => onTime(v === NO_TIME ? "" : v)}
+				<TimePicker
+					label={label}
+					value={time}
+					onChange={onTime}
 					disabled={!date}
-				>
-					<SelectTrigger
-						aria-label={`${label} time`}
-						className={cn("w-full", !time && "text-muted-foreground")}
-					>
-						<span className="flex min-w-0 items-center gap-2">
-							<Clock />
-							<SelectValue />
-						</span>
-					</SelectTrigger>
-					<SelectContent className="max-h-72">
-						<SelectItem value={NO_TIME}>No time</SelectItem>
-						{TIMES.map((t) => (
-							<SelectItem key={t.value} value={t.value}>
-								{t.label}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
+				/>
 			</div>
 		</div>
 	);
 }
 
-const NO_TIME = "none";
+// A searchable time list. Typing narrows it ("930", "9:30p", "2pm"), and a
+// time between the 15-minute steps ("9:40") is offered as its own entry.
+function TimePicker({
+	label,
+	value,
+	onChange,
+	disabled,
+}: {
+	label: string;
+	value: string;
+	onChange: (v: string) => void;
+	disabled: boolean;
+}) {
+	const [open, setOpen] = useState(false);
+	const [query, setQuery] = useState("");
+	const typed = parseTime(query);
+	const matches = TIMES.filter((t) => matchesTime(t.value, query));
+	const extra =
+		typed && !TIMES.some((t) => t.value === typed) ? typed : undefined;
+
+	function pick(v: string) {
+		onChange(v);
+		setOpen(false);
+		setQuery("");
+	}
+
+	return (
+		<Popover
+			open={open}
+			onOpenChange={(o) => {
+				setOpen(o);
+				if (!o) setQuery("");
+			}}
+		>
+			<PopoverTrigger asChild>
+				<Button
+					variant="outline"
+					aria-label={`${label} time`}
+					disabled={disabled}
+					className={cn(
+						"w-full justify-start px-3 font-normal",
+						!value && "text-muted-foreground",
+					)}
+				>
+					<Clock />
+					<span className="truncate">
+						{value ? timeLabel(value) : "No time"}
+					</span>
+					<ChevronDown className="ml-auto opacity-50" />
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent className="w-52 p-0" align="end">
+				<Command shouldFilter={false}>
+					<CommandInput
+						placeholder="Type a time…"
+						value={query}
+						onValueChange={setQuery}
+					/>
+					<CommandList className="max-h-64">
+						<CommandEmpty>No matching time.</CommandEmpty>
+						{extra && (
+							<CommandItem value={extra} onSelect={() => pick(extra)}>
+								{timeLabel(extra)}
+							</CommandItem>
+						)}
+						{!query && (
+							<CommandItem value="none" onSelect={() => pick("")}>
+								No time
+								{!value && <Check className="ml-auto" />}
+							</CommandItem>
+						)}
+						{matches.map((t) => (
+							<CommandItem
+								key={t.value}
+								value={t.value}
+								onSelect={() => pick(t.value)}
+							>
+								{t.label}
+								{t.value === value && <Check className="ml-auto" />}
+							</CommandItem>
+						))}
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+function timeLabel(value: string) {
+	const [h, m] = value.split(":").map(Number);
+	return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
 
 // Every 15 minutes, as "HH:mm" values with "9:30 AM" labels.
 const TIMES = Array.from({ length: 96 }, (_, i) => {
-	const h = Math.floor(i / 4);
-	const m = (i % 4) * 15;
-	const value = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-	const label = `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
-	return { value, label };
+	const value = `${String(Math.floor(i / 4)).padStart(2, "0")}:${String((i % 4) * 15).padStart(2, "0")}`;
+	return { value, label: timeLabel(value) };
 });
+
+// What was typed: its digits, and "a" or "p" if given.
+function splitQuery(query: string) {
+	const q = query.toLowerCase();
+	return {
+		digits: q.replace(/\D/g, ""),
+		meridiem: /p/.test(q) ? "p" : /a/.test(q) ? "a" : undefined,
+	};
+}
+
+// A step matches when its 12-hour digits start with the typed ones ("93"
+// finds 9:30) and the AM/PM agrees, if typed.
+function matchesTime(value: string, query: string) {
+	const { digits, meridiem } = splitQuery(query);
+	if (!digits && !meridiem) return true;
+	const [h, m] = value.split(":").map(Number);
+	if (meridiem && (h < 12 ? "a" : "p") !== meridiem) return false;
+	return `${h % 12 || 12}${String(m).padStart(2, "0")}`.startsWith(digits);
+}
+
+// A complete time from the query ("940", "9:40pm", "21:40"), as "HH:mm".
+// Without AM/PM, a 12-hour time reads as the next one from 7 AM on.
+function parseTime(query: string) {
+	const { digits, meridiem } = splitQuery(query);
+	if (digits.length < 3 || digits.length > 4) return undefined;
+	let h = Number(digits.slice(0, -2));
+	const m = Number(digits.slice(-2));
+	if (m > 59 || h > 23 || (meridiem && (h < 1 || h > 12))) return undefined;
+	if (meridiem === "p" && h < 12) h += 12;
+	else if (meridiem === "a" && h === 12) h = 0;
+	else if (!meridiem && h >= 1 && h <= 6) h += 12;
+	return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
 
 // Day keys ("YYYY-MM-DD") to and from local dates for the calendar.
 function fromKey(key: string) {
