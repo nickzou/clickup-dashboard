@@ -3,6 +3,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { Check, ExternalLink, Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { TaskDetailDialog } from "#/components/task-detail";
+import { groupOf, STATUS_GROUPS } from "#/components/task-fields";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -36,6 +38,8 @@ const SHOWN = 6;
 
 // Today's open tasks, already in order, grouped by Time of Day.
 export function UpcomingList({ tasks }: { tasks: UpcomingTask[] }) {
+	const { on: bigScreen } = useBigScreen();
+	const [editing, setEditing] = useState<UpcomingTask | null>(null);
 	if (tasks.length === 0) {
 		return (
 			<p className="text-sm text-muted-foreground">Nothing left for today.</p>
@@ -82,18 +86,29 @@ export function UpcomingList({ tasks }: { tasks: UpcomingTask[] }) {
 						{g.items.map((t) => (
 							<li key={t.id} className="flex items-center gap-2 text-sm">
 								<StatusMark task={t} />
-								<a
-									href={t.url}
-									target="_blank"
-									rel="noreferrer"
-									className="group inline-flex min-w-0 flex-1 items-center gap-1 hover:underline"
-								>
-									<span className="truncate">{t.name}</span>
-									<ExternalLink
-										className="size-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100"
-										aria-hidden
-									/>
-								</a>
+								{bigScreen ? (
+									<a
+										href={t.url}
+										target="_blank"
+										rel="noreferrer"
+										className="group inline-flex min-w-0 flex-1 items-center gap-1 hover:underline"
+									>
+										<span className="truncate">{t.name}</span>
+										<ExternalLink
+											className="size-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100"
+											aria-hidden
+										/>
+									</a>
+								) : (
+									// Opens the task's details to view and edit.
+									<button
+										type="button"
+										onClick={() => setEditing(t)}
+										className="min-w-0 flex-1 truncate rounded-sm text-left hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
+									>
+										{t.name}
+									</button>
+								)}
 								<TimePill task={t} />
 							</li>
 						))}
@@ -104,6 +119,9 @@ export function UpcomingList({ tasks }: { tasks: UpcomingTask[] }) {
 				<p className="text-xs text-muted-foreground">
 					+{tasks.length - SHOWN} more later today
 				</p>
+			)}
+			{!bigScreen && (
+				<TaskDetailDialog task={editing} onClose={() => setEditing(null)} />
 			)}
 		</div>
 	);
@@ -157,19 +175,6 @@ function StatusMark({ task }: { task: UpcomingTask }) {
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);
-}
-
-// ClickUp's own status groups, by status type, in its order. Any type it
-// adds later lands under Active rather than vanishing.
-const STATUS_GROUPS = [
-	{ label: "Not started", types: ["open"] },
-	{ label: "Active", types: ["custom"] },
-	{ label: "Done", types: ["done"] },
-	{ label: "Closed", types: ["closed"] },
-];
-
-function groupOf(type: string) {
-	return STATUS_GROUPS.find((g) => g.types.includes(type)) ?? STATUS_GROUPS[1];
 }
 
 function StatusOptions({

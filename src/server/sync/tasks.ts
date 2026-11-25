@@ -176,6 +176,7 @@ function dropDownOption(f: ClickUpTask["custom_fields"][number]) {
 	);
 	if (!option?.name || option.orderindex === undefined) return undefined;
 	return {
+		id: option.id,
 		name: option.name,
 		color: option.color ?? null,
 		order: option.orderindex,

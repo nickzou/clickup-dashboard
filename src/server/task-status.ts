@@ -2,19 +2,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth } from "./auth";
-import { createClickUpClient } from "./clickup/client";
-import { getMeId } from "./clickup/me";
+import { tokenClient as client, getMeId } from "./clickup/me";
 import { listStatusesResponse, task } from "./clickup/schemas";
 import { getDb } from "./db/client";
 import { tasks } from "./db/schema";
-import { env } from "./env";
 import { saveTask } from "./sync/tasks";
-
-function client() {
-	const { CLICKUP_TOKEN } = env();
-	if (!CLICKUP_TOKEN) throw new Error("CLICKUP_TOKEN is not set.");
-	return createClickUpClient(CLICKUP_TOKEN);
-}
 
 const id = z.string().regex(/^[A-Za-z0-9]+$/);
 

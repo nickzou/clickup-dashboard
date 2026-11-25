@@ -130,3 +130,20 @@ function offset(ms: number, timeZone: string) {
 		Math.floor(ms / 60_000) * 60_000
 	);
 }
+
+// The wall-clock time ("HH:mm", 24-hour) of an instant in the zone, or
+// undefined for ClickUp's "no time" (4:00 AM).
+export function clockTime(ms: number, timeZone: string): string | undefined {
+	if (!timeOfDay(ms, timeZone)) return undefined;
+	const p = Object.fromEntries(
+		new Intl.DateTimeFormat("en-US", {
+			timeZone,
+			hourCycle: "h23",
+			hour: "2-digit",
+			minute: "2-digit",
+		})
+			.formatToParts(ms)
+			.map((x) => [x.type, x.value]),
+	);
+	return `${p.hour}:${p.minute}`;
+}

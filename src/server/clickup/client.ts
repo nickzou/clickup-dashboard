@@ -1,7 +1,10 @@
 import "@tanstack/react-start/server-only";
-import type { z } from "zod";
+import { z } from "zod";
 
 const BASE_URL = "https://api.clickup.com/api/v2";
+// A few newer endpoints (moving a task between lists) exist only in v3;
+// paths starting "/v3/" go there.
+const V3_BASE_URL = "https://api.clickup.com/api";
 // ClickUp allows 100 requests/min per token; leave room for the ClickUp app.
 const MAX_PER_MINUTE = 80;
 const RETRY_DELAYS_MS = [2_000, 8_000, 30_000];
@@ -57,6 +60,7 @@ export type ClickUpClient = {
 		schema: T,
 		body: unknown,
 	): Promise<z.infer<T>>;
+	delete(path: string): Promise<void>;
 	readonly requestCount: number;
 };
 
@@ -76,12 +80,14 @@ export function createClickUpClient(
 		schema: T,
 		query: Query,
 		allowMissing: boolean,
-		write?: { method: "POST" | "PUT"; body: unknown },
+		write?: { method: "POST" | "PUT" | "DELETE"; body?: unknown },
 	): Promise<z.infer<T>> {
 		const method = write?.method ?? "GET";
 		const body = write?.body;
 		const retries = method === "GET" ? RETRY_DELAYS_MS.length : 0;
-		const url = new URL(BASE_URL + path);
+		const url = new URL(
+			(path.startsWith("/v3/") ? V3_BASE_URL : BASE_URL) + path,
+		);
 		for (const [k, v] of Object.entries(query)) {
 			if (v !== undefined) url.searchParams.set(k, String(v));
 		}
@@ -131,7 +137,9 @@ export function createClickUpClient(
 			if (!res.ok) {
 				throw new ClickUpError(`${method} ${path} returned ${res.status}`);
 			}
-			return schema.parse(await res.json());
+			// A DELETE can answer with an empty body.
+			const text = await res.text();
+			return schema.parse(text ? JSON.parse(text) : {});
 		}
 	}
 
@@ -141,6 +149,9 @@ export function createClickUpClient(
 			request(path, schema, {}, false, { method: "POST", body }),
 		put: (path, schema, body) =>
 			request(path, schema, {}, false, { method: "PUT", body }),
+		async delete(path) {
+			await request(path, z.unknown(), {}, false, { method: "DELETE" });
+		},
 		async find(path, schema, query = {}) {
 			try {
 				return await request(path, schema, query, true);

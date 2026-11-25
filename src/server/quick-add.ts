@@ -12,14 +12,12 @@ import { INBOX } from "./inbox";
 import { dayKey, zonedMs } from "./stats/dates";
 import { saveTask } from "./sync/tasks";
 
-export type CaptureList = Awaited<
-	ReturnType<typeof getCaptureLists>
->["lists"][number];
+export type CaptureList = OpenList;
 
 const TIME_OF_DAY = "time of day";
 
 // The workspace's Time of Day field and its settable options, if synced.
-function timeOfDayField() {
+export function timeOfDayField() {
 	const field = getDb()
 		.select()
 		.from(customFields)
@@ -33,35 +31,41 @@ function timeOfDayField() {
 	return options.length ? { id: field.id, options } : null;
 }
 
-// Every open list, by space then folder, for the modal's list picker.
+// Every open list, by space then folder: where a task can be filed or moved.
+export function openLists() {
+	return getDb()
+		.select({
+			id: lists.id,
+			name: lists.name,
+			space: spaces.name,
+			folder: folders.name,
+		})
+		.from(lists)
+		.innerJoin(spaces, eq(spaces.id, lists.spaceId))
+		.leftJoin(folders, eq(folders.id, lists.folderId))
+		.where(
+			and(
+				eq(lists.archived, false),
+				eq(spaces.archived, false),
+				// Every sync stamps each active list it finds with that run's
+				// time, and never removes the ones it doesn't: anything older
+				// than the latest stamp was deleted in ClickUp.
+				gte(
+					lists.syncedAt,
+					sql`(select max(${lists.syncedAt}) from ${lists} where ${lists.archived} = 0)`,
+				),
+			),
+		)
+		.orderBy(asc(spaces.name), asc(folders.name), asc(lists.name))
+		.all();
+}
+
+export type OpenList = ReturnType<typeof openLists>[number];
+
 export const getCaptureLists = createServerFn({ method: "GET" })
 	.middleware([requireAuth])
 	.handler(() => {
-		const rows = getDb()
-			.select({
-				id: lists.id,
-				name: lists.name,
-				space: spaces.name,
-				folder: folders.name,
-			})
-			.from(lists)
-			.innerJoin(spaces, eq(spaces.id, lists.spaceId))
-			.leftJoin(folders, eq(folders.id, lists.folderId))
-			.where(
-				and(
-					eq(lists.archived, false),
-					eq(spaces.archived, false),
-					// Every sync stamps each active list it finds with that run's
-					// time, and never removes the ones it doesn't: anything older
-					// than the latest stamp was deleted in ClickUp.
-					gte(
-						lists.syncedAt,
-						sql`(select max(${lists.syncedAt}) from ${lists} where ${lists.archived} = 0)`,
-					),
-				),
-			)
-			.orderBy(asc(spaces.name), asc(folders.name), asc(lists.name))
-			.all();
+		const rows = openLists();
 		// Captures land in Inbox › Inbox unless another list is picked.
 		const inbox = rows.find(
 			(l) => l.space.toLowerCase() === INBOX && l.name.toLowerCase() === INBOX,

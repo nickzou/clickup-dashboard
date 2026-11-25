@@ -65,6 +65,7 @@ export const task = z.object({
 	name: z.string(),
 	url: z.string(),
 	status: z.object({
+		id: z.string().optional(),
 		status: z.string(),
 		type: z.string(),
 		color: z.string().nullish(),
@@ -136,6 +137,7 @@ export const taskTypesResponse = z.object({
 export const listStatusesResponse = z.object({
 	statuses: z.array(
 		z.object({
+			id: z.string().optional(),
 			status: z.string(),
 			color: z.string().nullish(),
 			type: z.string(),
