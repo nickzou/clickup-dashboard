@@ -8,9 +8,9 @@ import { listStatusesResponse, task } from "./clickup/schemas";
 import { getDb } from "./db/client";
 import { tasks, taskTypes } from "./db/schema";
 import { env } from "./env";
-import { openLists, timeOfDayField } from "./quick-add";
 import { clockTime, dayKey, zonedMs } from "./stats/dates";
 import { saveTask } from "./sync/tasks";
+import { openLists, timeOfDayField } from "./task-options";
 
 const taskId = z.string().regex(/^[A-Za-z0-9]+$/);
 
