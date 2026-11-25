@@ -131,3 +131,15 @@ export const fieldsResponse = z.object({
 export const taskTypesResponse = z.object({
 	custom_items: z.array(z.object({ id: z.number(), name: z.string() })),
 });
+
+// A list's statuses, its own or inherited from its folder or space.
+export const listStatusesResponse = z.object({
+	statuses: z.array(
+		z.object({
+			status: z.string(),
+			color: z.string().nullish(),
+			type: z.string(),
+			orderindex: z.coerce.number(),
+		}),
+	),
+});

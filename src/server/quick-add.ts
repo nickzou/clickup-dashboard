@@ -3,7 +3,8 @@ import { and, asc, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth } from "./auth";
 import { createClickUpClient } from "./clickup/client";
-import { task, userResponse } from "./clickup/schemas";
+import { getMeId } from "./clickup/me";
+import { task } from "./clickup/schemas";
 import { getDb } from "./db/client";
 import { customFields, folders, lists, spaces } from "./db/schema";
 import { env } from "./env";
@@ -102,8 +103,6 @@ const captureInput = z.object({
 
 const createdTask = z.object({ id: z.string(), url: z.string() });
 
-let meId: number | undefined;
-
 // Creates the task in ClickUp, assigned to me, and saves it locally so the
 // dashboard shows it before the next sync.
 export const createTask = createServerFn({ method: "POST" })
@@ -134,7 +133,7 @@ export const createTask = createServerFn({ method: "POST" })
 		}
 
 		const client = createClickUpClient(CLICKUP_TOKEN);
-		meId ??= (await client.get("/user", userResponse)).user.id;
+		const meId = await getMeId(client);
 		const created = await client.post(`/list/${list.id}/task`, createdTask, {
 			name: data.name,
 			...(data.notes && { markdown_content: data.notes }),

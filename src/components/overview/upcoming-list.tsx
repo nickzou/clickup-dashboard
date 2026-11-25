@@ -1,4 +1,19 @@
-import { ExternalLink, Users } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { Check, ExternalLink, Users } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuGroup,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "#/components/ui/dropdown-menu";
+import { useBigScreen } from "#/lib/big-screen";
+import { getListStatuses, setTaskStatus } from "#/server/task-status";
 
 type UpcomingTask = {
 	id: string;
@@ -6,6 +21,7 @@ type UpcomingTask = {
 	url: string;
 	status: string;
 	statusColor: string | null;
+	listId: string;
 	meeting: boolean;
 	timeOfDay: {
 		name: string | null;
@@ -65,38 +81,7 @@ export function UpcomingList({ tasks }: { tasks: UpcomingTask[] }) {
 					<ul className="grid grid-cols-1 gap-1.5">
 						{g.items.map((t) => (
 							<li key={t.id} className="flex items-center gap-2 text-sm">
-								{/* The task's ClickUp status, in its ClickUp color: a dot, or
-								    a people icon for meetings. One fixed slot, so titles
-								    line up. */}
-								<span
-									className="flex size-3.5 shrink-0 items-center justify-center"
-									title={t.meeting ? `Meeting · ${t.status}` : t.status}
-									role="img"
-									aria-label={
-										t.meeting
-											? `Meeting, status: ${t.status}`
-											: `Status: ${t.status}`
-									}
-								>
-									{t.meeting ? (
-										<Users
-											className="size-3.5 text-muted-foreground"
-											style={
-												t.statusColor ? { color: t.statusColor } : undefined
-											}
-											aria-hidden
-										/>
-									) : (
-										<span
-											className="size-2 rounded-full bg-muted-foreground"
-											style={
-												t.statusColor
-													? { background: t.statusColor }
-													: undefined
-											}
-										/>
-									)}
-								</span>
+								<StatusMark task={t} />
 								<a
 									href={t.url}
 									target="_blank"
@@ -121,6 +106,136 @@ export function UpcomingList({ tasks }: { tasks: UpcomingTask[] }) {
 				</p>
 			)}
 		</div>
+	);
+}
+
+// The task's ClickUp status, in its ClickUp color: a dot, or a people icon
+// for meetings. One fixed slot, so titles line up. Outside big screen view it
+// opens a menu to move the task to another of its list's statuses.
+function StatusMark({ task }: { task: UpcomingTask }) {
+	const { on: bigScreen } = useBigScreen();
+	const [open, setOpen] = useState(false);
+	const label = task.meeting
+		? `Meeting, status: ${task.status}`
+		: `Status: ${task.status}`;
+	const mark = task.meeting ? (
+		<Users
+			className="size-3.5 text-muted-foreground"
+			style={task.statusColor ? { color: task.statusColor } : undefined}
+			aria-hidden
+		/>
+	) : (
+		<span
+			className="size-2 rounded-full bg-muted-foreground"
+			style={task.statusColor ? { background: task.statusColor } : undefined}
+		/>
+	);
+
+	if (bigScreen) {
+		return (
+			<span
+				className="flex size-3.5 shrink-0 items-center justify-center"
+				title={task.meeting ? `Meeting · ${task.status}` : task.status}
+				role="img"
+				aria-label={label}
+			>
+				{mark}
+			</span>
+		);
+	}
+	return (
+		<DropdownMenu open={open} onOpenChange={setOpen}>
+			<DropdownMenuTrigger
+				className="-m-1 flex size-5.5 shrink-0 items-center justify-center rounded-sm p-1 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+				aria-label={`${label}. Change status`}
+				title={`${task.meeting ? "Meeting · " : ""}${task.status} · change status`}
+			>
+				{mark}
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start" className="w-56">
+				{open && <StatusOptions task={task} onDone={() => setOpen(false)} />}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
+// ClickUp's own status groups, by status type, in its order. Any type it
+// adds later lands under Active rather than vanishing.
+const STATUS_GROUPS = [
+	{ label: "Not started", types: ["open"] },
+	{ label: "Active", types: ["custom"] },
+	{ label: "Done", types: ["done"] },
+	{ label: "Closed", types: ["closed"] },
+];
+
+function groupOf(type: string) {
+	return STATUS_GROUPS.find((g) => g.types.includes(type)) ?? STATUS_GROUPS[1];
+}
+
+function StatusOptions({
+	task,
+	onDone,
+}: {
+	task: UpcomingTask;
+	onDone: () => void;
+}) {
+	const queryClient = useQueryClient();
+	const setStatus = useServerFn(setTaskStatus);
+	const { data, isError } = useQuery({
+		queryKey: ["list-statuses", task.listId],
+		queryFn: () => getListStatuses({ data: { listId: task.listId } }),
+		staleTime: 10 * 60_000,
+	});
+
+	async function pick(status: string) {
+		onDone();
+		if (status.toLowerCase() === task.status.toLowerCase()) return;
+		try {
+			await setStatus({ data: { taskId: task.id, status } });
+			toast.success(`${task.name} → ${status}`);
+			void queryClient.invalidateQueries({ queryKey: ["overview"] });
+		} catch (err) {
+			toast.error(
+				err instanceof Error ? err.message : "Couldn't change the status.",
+			);
+		}
+	}
+
+	return (
+		<>
+			<DropdownMenuLabel className="truncate">{task.name}</DropdownMenuLabel>
+			<DropdownMenuSeparator />
+			{isError ? (
+				<DropdownMenuItem disabled>Couldn't load statuses</DropdownMenuItem>
+			) : !data ? (
+				<DropdownMenuItem disabled>Loading…</DropdownMenuItem>
+			) : (
+				STATUS_GROUPS.map((g) => {
+					const items = data.filter((s) => groupOf(s.type) === g);
+					if (!items.length) return null;
+					return (
+						<DropdownMenuGroup key={g.label}>
+							<DropdownMenuLabel className="pt-2 pb-1 text-xs font-medium text-muted-foreground">
+								{g.label}
+							</DropdownMenuLabel>
+							{items.map((s) => (
+								<DropdownMenuItem key={s.name} onSelect={() => pick(s.name)}>
+									<span
+										className="size-2 shrink-0 rounded-full bg-muted-foreground"
+										style={s.color ? { background: s.color } : undefined}
+										aria-hidden
+									/>
+									<span className="truncate capitalize">{s.name}</span>
+									{s.name.toLowerCase() === task.status.toLowerCase() && (
+										<Check className="ml-auto" />
+									)}
+								</DropdownMenuItem>
+							))}
+						</DropdownMenuGroup>
+					);
+				})
+			)}
+		</>
 	);
 }
 

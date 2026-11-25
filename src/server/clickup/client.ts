@@ -45,8 +45,14 @@ export type ClickUpClient = {
 		schema: T,
 		query?: Query,
 	): Promise<z.infer<T> | null>;
-	// Not retried on network errors or 5xx, which could create twice.
+	// Writes aren't retried on network errors or 5xx, which could apply them
+	// twice.
 	post<T extends z.ZodType>(
+		path: string,
+		schema: T,
+		body: unknown,
+	): Promise<z.infer<T>>;
+	put<T extends z.ZodType>(
 		path: string,
 		schema: T,
 		body: unknown,
@@ -70,9 +76,10 @@ export function createClickUpClient(
 		schema: T,
 		query: Query,
 		allowMissing: boolean,
-		body?: unknown,
+		write?: { method: "POST" | "PUT"; body: unknown },
 	): Promise<z.infer<T>> {
-		const method = body === undefined ? "GET" : "POST";
+		const method = write?.method ?? "GET";
+		const body = write?.body;
 		const retries = method === "GET" ? RETRY_DELAYS_MS.length : 0;
 		const url = new URL(BASE_URL + path);
 		for (const [k, v] of Object.entries(query)) {
@@ -130,7 +137,10 @@ export function createClickUpClient(
 
 	return {
 		get: (path, schema, query = {}) => request(path, schema, query, false),
-		post: (path, schema, body) => request(path, schema, {}, false, body),
+		post: (path, schema, body) =>
+			request(path, schema, {}, false, { method: "POST", body }),
+		put: (path, schema, body) =>
+			request(path, schema, {}, false, { method: "PUT", body }),
 		async find(path, schema, query = {}) {
 			try {
 				return await request(path, schema, query, true);

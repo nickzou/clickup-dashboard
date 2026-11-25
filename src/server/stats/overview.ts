@@ -410,6 +410,7 @@ function upcomingToday(
 			start: tasks.startDate,
 			customFields: tasks.customFields,
 			typeId: tasks.customItemId,
+			listId: tasks.listId,
 		})
 		.from(tasks)
 		.where(
@@ -467,6 +468,7 @@ function upcomingToday(
 				url: t.url,
 				status: t.status,
 				statusColor: t.statusColor,
+				listId: t.listId,
 				meeting: t.typeId !== null && meetingTypes.has(t.typeId),
 				timeOfDay:
 					order === null
