@@ -77,6 +77,7 @@ export const task = z.object({
 	due_date: msOrNull,
 	start_date: msOrNull,
 	time_estimate: z.number().nullish(),
+	custom_item_id: z.number().nullish(),
 	priority: z.object({ priority: z.string() }).nullish(),
 	tags: z.array(z.object({ name: z.string() })).default([]),
 	assignees: z.array(z.object({ id: z.number() })).default([]),
@@ -125,4 +126,8 @@ export const fieldsResponse = z.object({
 			type_config: fieldTypeConfig,
 		}),
 	),
+});
+
+export const taskTypesResponse = z.object({
+	custom_items: z.array(z.object({ id: z.number(), name: z.string() })),
 });

@@ -1,8 +1,8 @@
 import "@tanstack/react-start/server-only";
 import type { ClickUpClient } from "../clickup/client";
-import { fieldsResponse } from "../clickup/schemas";
+import { fieldsResponse, taskTypesResponse } from "../clickup/schemas";
 import type { Db } from "../db/client";
-import { customFields, type FieldOption } from "../db/schema";
+import { customFields, type FieldOption, taskTypes } from "../db/schema";
 
 // Workspace custom fields, replaced on every run: one request, and option
 // names and colors stay current when they're renamed or recolored in ClickUp.
@@ -37,6 +37,27 @@ export async function syncCustomFields(
 					options,
 					syncedAt: now,
 				})
+				.run();
+		}
+	});
+}
+
+// Task types (Meeting, Milestone, ...), so a task's custom_item_id has a name.
+export async function syncTaskTypes(
+	db: Db,
+	client: ClickUpClient,
+	teamId: string,
+) {
+	const { custom_items } = await client.get(
+		`/team/${teamId}/custom_item`,
+		taskTypesResponse,
+	);
+	const now = Date.now();
+	db.transaction((tx) => {
+		tx.delete(taskTypes).run();
+		for (const t of custom_items) {
+			tx.insert(taskTypes)
+				.values({ id: t.id, name: t.name, syncedAt: now })
 				.run();
 		}
 	});

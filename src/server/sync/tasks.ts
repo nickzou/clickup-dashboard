@@ -152,6 +152,7 @@ function toRow(t: ClickUpTask, meId: number, now: number) {
 		dueDate: t.due_date,
 		startDate: t.start_date,
 		timeEstimate: t.time_estimate ?? null,
+		customItemId: t.custom_item_id ?? null,
 		// Lists attach every field to every task; keep only the ones set.
 		customFields: t.custom_fields
 			.filter((f) => f.value !== undefined && f.value !== null)

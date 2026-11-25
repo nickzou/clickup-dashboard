@@ -65,6 +65,9 @@ export const tasks = sqliteTable(
 		dueDate: integer(),
 		startDate: integer(),
 		timeEstimate: integer(),
+		// ClickUp's task type: 0 or null for a plain task, else an id from
+		// task_types (Meeting, Milestone, ...).
+		customItemId: integer(),
 		customFields: text({ mode: "json" }).$type<CustomFieldValue[]>().notNull(),
 		syncedAt: integer().notNull(),
 		// Set by the nightly reconcile when ClickUp no longer returns the task.
@@ -96,6 +99,13 @@ export const taskDueChanges = sqliteTable(
 );
 
 // Workspace custom field definitions, for drop-down option names and colors.
+// The workspace's task types, replaced on every run like custom_fields.
+export const taskTypes = sqliteTable("task_types", {
+	id: integer().primaryKey(),
+	name: text().notNull(),
+	syncedAt: integer().notNull(),
+});
+
 export type FieldOption = {
 	// ClickUp's id for the option, needed to set it. Missing on rows from
 	// before it was kept.

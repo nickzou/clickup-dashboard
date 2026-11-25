@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Users } from "lucide-react";
 
 type UpcomingTask = {
 	id: string;
@@ -6,6 +6,7 @@ type UpcomingTask = {
 	url: string;
 	status: string;
 	statusColor: string | null;
+	meeting: boolean;
 	timeOfDay: {
 		name: string | null;
 		color: string | null;
@@ -64,16 +65,38 @@ export function UpcomingList({ tasks }: { tasks: UpcomingTask[] }) {
 					<ul className="grid grid-cols-1 gap-1.5">
 						{g.items.map((t) => (
 							<li key={t.id} className="flex items-center gap-2 text-sm">
-								{/* The task's ClickUp status, in its ClickUp color. */}
+								{/* The task's ClickUp status, in its ClickUp color: a dot, or
+								    a people icon for meetings. One fixed slot, so titles
+								    line up. */}
 								<span
-									className="size-2 shrink-0 rounded-full bg-muted-foreground"
-									style={
-										t.statusColor ? { background: t.statusColor } : undefined
-									}
-									title={t.status}
+									className="flex size-3.5 shrink-0 items-center justify-center"
+									title={t.meeting ? `Meeting · ${t.status}` : t.status}
 									role="img"
-									aria-label={`Status: ${t.status}`}
-								/>
+									aria-label={
+										t.meeting
+											? `Meeting, status: ${t.status}`
+											: `Status: ${t.status}`
+									}
+								>
+									{t.meeting ? (
+										<Users
+											className="size-3.5 text-muted-foreground"
+											style={
+												t.statusColor ? { color: t.statusColor } : undefined
+											}
+											aria-hidden
+										/>
+									) : (
+										<span
+											className="size-2 rounded-full bg-muted-foreground"
+											style={
+												t.statusColor
+													? { background: t.statusColor }
+													: undefined
+											}
+										/>
+									)}
+								</span>
 								<a
 									href={t.url}
 									target="_blank"

@@ -20,6 +20,7 @@ import {
 	taskDueChanges,
 	taskStatusChanges,
 	tasks,
+	taskTypes,
 } from "../db/schema";
 import { inboxSpaceIds } from "../inbox";
 import {
@@ -408,6 +409,7 @@ function upcomingToday(
 			due: tasks.dueDate,
 			start: tasks.startDate,
 			customFields: tasks.customFields,
+			typeId: tasks.customItemId,
 		})
 		.from(tasks)
 		.where(
@@ -439,6 +441,17 @@ function upcomingToday(
 		for (const o of f.options) knownOptions.set(`${f.id}:${o.order}`, o);
 	}
 
+	// Meetings get their own icon. Matched by the task type's name, like Time
+	// of Day.
+	const meetingTypes = new Set(
+		db
+			.select({ id: taskTypes.id, name: taskTypes.name })
+			.from(taskTypes)
+			.all()
+			.filter((t) => t.name.toLowerCase() === "meeting")
+			.map((t) => t.id),
+	);
+
 	return rows
 		.map((t) => {
 			const field = t.customFields.find(
@@ -454,6 +467,7 @@ function upcomingToday(
 				url: t.url,
 				status: t.status,
 				statusColor: t.statusColor,
+				meeting: t.typeId !== null && meetingTypes.has(t.typeId),
 				timeOfDay:
 					order === null
 						? null
