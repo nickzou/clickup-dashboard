@@ -21,6 +21,7 @@ import {
 	taskStatusChanges,
 	tasks,
 } from "../db/schema";
+import { inboxSpaceIds } from "../inbox";
 import {
 	addDays,
 	dayKey,
@@ -103,10 +104,13 @@ export function getOverviewStats(
 	const { from, prevFrom, prevTo } = def.bounds(today);
 	const { bucket } = def;
 
+	// Unprocessed captures in the Inbox space count toward nothing.
+	const inbox = inboxSpaceIds(db);
 	const scope = and(
 		eq(tasks.isMine, true),
 		isNull(tasks.deletedAt),
 		spaceId ? eq(tasks.spaceId, spaceId) : undefined,
+		inbox.length ? notInArray(tasks.spaceId, inbox) : undefined,
 	);
 
 	// Every completion, bucketed by local day. A few thousand rows: cheaper to
@@ -375,7 +379,9 @@ export function getOverviewStats(
 		bySpace,
 		waiting: waitingTasks(db, open, listNames, tz),
 		upcoming: upcomingToday(db, scope, tz, today, now),
-		spaces: [...spaceNames].map(([id, name]) => ({ id, name })),
+		spaces: [...spaceNames]
+			.filter(([id]) => !inbox.includes(id))
+			.map(([id, name]) => ({ id, name })),
 	};
 }
 

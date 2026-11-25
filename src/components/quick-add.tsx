@@ -88,8 +88,8 @@ export function QuickAddBar({ className }: { className?: string }) {
 	);
 }
 
-// Quick capture: a name, optional notes, and a list (Routines › Inbox unless
-// changed). Assigned to me, so it counts like any other task.
+// Quick capture: a name, optional notes, and a list (Inbox › Inbox unless
+// changed). Assigned to me.
 function QuickAddDialog({ children }: { children: ReactNode }) {
 	const [open, setOpen] = useState(false);
 	return (
@@ -115,14 +115,16 @@ function QuickAddForm({ onDone }: { onDone: () => void }) {
 	const [listId, setListId] = useState<string>();
 	const [startDate, setStartDate] = useState("");
 	const [startTime, setStartTime] = useState("");
-	// Due today until changed; "" once cleared.
+	// Due today until changed ("" once cleared), except in the inbox, where
+	// captures wait undated until they're processed.
 	const [dueDate, setDueDate] = useState<string>();
 	const [dueTime, setDueTime] = useState("");
 	// Unset unless picked.
 	const [timeOfDay, setTimeOfDay] = useState("");
 	const [saving, setSaving] = useState(false);
 	const selected = listId ?? data?.defaultId ?? undefined;
-	const due = dueDate ?? data?.today ?? "";
+	const due =
+		dueDate ?? (selected === data?.inboxId ? "" : (data?.today ?? ""));
 	const start = startDate
 		? { date: startDate, time: startTime || undefined }
 		: undefined;

@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth } from "./auth";
 import { createClickUpClient } from "./clickup/client";
@@ -7,12 +7,9 @@ import { task, userResponse } from "./clickup/schemas";
 import { getDb } from "./db/client";
 import { customFields, folders, lists, spaces } from "./db/schema";
 import { env } from "./env";
+import { INBOX } from "./inbox";
 import { dayKey, zonedMs } from "./stats/dates";
 import { saveTask } from "./sync/tasks";
-
-// Where quick captures land unless another list is picked.
-const DEFAULT_SPACE = "routines";
-const DEFAULT_LIST = "inbox";
 
 export type CaptureList = Awaited<
 	ReturnType<typeof getCaptureLists>
@@ -49,19 +46,31 @@ export const getCaptureLists = createServerFn({ method: "GET" })
 			.from(lists)
 			.innerJoin(spaces, eq(spaces.id, lists.spaceId))
 			.leftJoin(folders, eq(folders.id, lists.folderId))
-			.where(and(eq(lists.archived, false), eq(spaces.archived, false)))
+			.where(
+				and(
+					eq(lists.archived, false),
+					eq(spaces.archived, false),
+					// Every sync stamps each active list it finds with that run's
+					// time, and never removes the ones it doesn't: anything older
+					// than the latest stamp was deleted in ClickUp.
+					gte(
+						lists.syncedAt,
+						sql`(select max(${lists.syncedAt}) from ${lists} where ${lists.archived} = 0)`,
+					),
+				),
+			)
 			.orderBy(asc(spaces.name), asc(folders.name), asc(lists.name))
 			.all();
+		// Captures land in Inbox › Inbox unless another list is picked.
 		const inbox = rows.find(
-			(l) =>
-				l.space.toLowerCase() === DEFAULT_SPACE &&
-				l.name.toLowerCase() === DEFAULT_LIST,
+			(l) => l.space.toLowerCase() === INBOX && l.name.toLowerCase() === INBOX,
 		);
 		return {
+			inboxId: inbox?.id ?? null,
 			lists: rows,
 			defaultId: inbox?.id ?? rows[0]?.id ?? null,
 			timeOfDay: timeOfDayField()?.options ?? [],
-			// New tasks are due today unless changed.
+			// Due today by default, except in the inbox (see the form).
 			today: dayKey(Date.now(), env().TZ),
 		};
 	});
