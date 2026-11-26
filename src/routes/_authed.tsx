@@ -39,8 +39,10 @@ function AuthedLayout() {
 			<AppSidebar />
 			<SidebarInset>
 				{/* In big screen view the bar goes: only its buttons remain, floating
-				    top right, level with the page's first row (the filters). */}
-				<header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur big-screen:absolute big-screen:right-0 big-screen:h-auto big-screen:border-0 big-screen:bg-transparent big-screen:p-4 big-screen:backdrop-blur-none md:big-screen:p-6">
+				    top right, level with the page's first row (the filters). z-20 keeps
+				    it above page content that raises itself to z-10 (a focused toggle,
+				    the heatmap tooltip) as it scrolls under. */}
+				<header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur big-screen:absolute big-screen:right-0 big-screen:h-auto big-screen:border-0 big-screen:bg-transparent big-screen:p-4 big-screen:backdrop-blur-none md:big-screen:p-6">
 					<SidebarTrigger className="-ml-1 big-screen:hidden" />
 					<Separator
 						orientation="vertical"
