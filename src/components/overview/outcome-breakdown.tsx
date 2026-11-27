@@ -90,14 +90,16 @@ export function OutcomeBreakdown({ counts }: { counts: Counts }) {
 								style={{ background: r.color }}
 								aria-hidden
 							/>
-							<span>{r.label}</span>
-							<span className="truncate text-xs text-muted-foreground">
+							<span className="shrink-0">{r.label}</span>
+							{/* The hint gives way first, so the count and percent
+							    columns line up on every row. */}
+							<span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
 								{r.hint}
 							</span>
-							<span className="ml-auto font-medium tabular-nums">
+							<span className="w-12 shrink-0 text-right font-medium tabular-nums">
 								{n.toLocaleString()}
 							</span>
-							<span className="w-10 text-right text-muted-foreground tabular-nums">
+							<span className="w-10 shrink-0 text-right text-muted-foreground tabular-nums">
 								{Math.round((n / total) * 100)}%
 							</span>
 						</li>
