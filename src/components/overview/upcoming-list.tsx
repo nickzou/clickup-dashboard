@@ -24,6 +24,11 @@ type UpcomingTask = {
 	status: string;
 	statusColor: string | null;
 	listId: string;
+	category: {
+		list: string;
+		space: string | null;
+		color: string | null;
+	} | null;
 	meeting: boolean;
 	timeOfDay: {
 		name: string | null;
@@ -86,29 +91,33 @@ export function UpcomingList({ tasks }: { tasks: UpcomingTask[] }) {
 						{g.items.map((t) => (
 							<li key={t.id} className="flex items-center gap-2 text-sm">
 								<StatusMark task={t} />
-								{bigScreen ? (
-									<a
-										href={t.url}
-										target="_blank"
-										rel="noreferrer"
-										className="group inline-flex min-w-0 flex-1 items-center gap-1 hover:underline"
-									>
-										<span className="truncate">{t.name}</span>
-										<ExternalLink
-											className="size-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100"
-											aria-hidden
-										/>
-									</a>
-								) : (
-									// Opens the task's details to view and edit.
-									<button
-										type="button"
-										onClick={() => setEditing(t)}
-										className="min-w-0 flex-1 truncate rounded-sm text-left hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
-									>
-										{t.name}
-									</button>
-								)}
+								{/* The name gives way before the category pill. */}
+								<span className="flex min-w-0 flex-1 items-center gap-2">
+									{bigScreen ? (
+										<a
+											href={t.url}
+											target="_blank"
+											rel="noreferrer"
+											className="group inline-flex min-w-0 items-center gap-1 hover:underline"
+										>
+											<span className="truncate">{t.name}</span>
+											<ExternalLink
+												className="size-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100"
+												aria-hidden
+											/>
+										</a>
+									) : (
+										// Opens the task's details to view and edit.
+										<button
+											type="button"
+											onClick={() => setEditing(t)}
+											className="min-w-0 truncate rounded-sm text-left hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
+										>
+											{t.name}
+										</button>
+									)}
+									<CategoryPill task={t} />
+								</span>
 								<TimePill task={t} />
 							</li>
 						))}
@@ -241,6 +250,27 @@ function StatusOptions({
 				})
 			)}
 		</>
+	);
+}
+
+// The task's list, outlined in its space's color, so the kind of work coming
+// up reads at a glance. Hidden on phones, where the name needs the room.
+function CategoryPill({ task }: { task: UpcomingTask }) {
+	const c = task.category;
+	if (!c) return null;
+	return (
+		<span
+			className="hidden max-w-40 shrink-0 items-center gap-1.5 rounded-full border px-2 py-px text-xs whitespace-nowrap text-muted-foreground sm:inline-flex"
+			style={c.color ? { borderColor: c.color } : undefined}
+			title={c.space ? `${c.space} › ${c.list}` : c.list}
+		>
+			<span
+				className="size-1.5 shrink-0 rounded-full bg-muted-foreground"
+				style={c.color ? { background: c.color } : undefined}
+				aria-hidden
+			/>
+			<span className="truncate">{c.list}</span>
+		</span>
 	);
 }
 

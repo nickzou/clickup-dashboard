@@ -412,8 +412,13 @@ function upcomingToday(
 			typeId: tasks.customItemId,
 			teamId: tasks.teamId,
 			listId: tasks.listId,
+			listName: lists.name,
+			spaceName: spaces.name,
+			spaceColor: spaces.color,
 		})
 		.from(tasks)
+		.leftJoin(lists, eq(lists.id, tasks.listId))
+		.leftJoin(spaces, eq(spaces.id, tasks.spaceId))
 		.where(
 			and(
 				scope,
@@ -474,6 +479,11 @@ function upcomingToday(
 				status: t.status,
 				statusColor: t.statusColor,
 				listId: t.listId,
+				// The kind of work: its list, in its space's color. Null until
+				// a sync has seen the list.
+				category: t.listName
+					? { list: t.listName, space: t.spaceName, color: t.spaceColor }
+					: null,
 				meeting:
 					t.typeId !== null && meetingTypes.has(`${t.teamId}:${t.typeId}`),
 				timeOfDay:
