@@ -410,6 +410,7 @@ function upcomingToday(
 			start: tasks.startDate,
 			customFields: tasks.customFields,
 			typeId: tasks.customItemId,
+			teamId: tasks.teamId,
 			listId: tasks.listId,
 		})
 		.from(tasks)
@@ -443,14 +444,18 @@ function upcomingToday(
 	}
 
 	// Meetings get their own icon. Matched by the task type's name, like Time
-	// of Day.
+	// of Day, within the task's workspace: type ids repeat across them.
 	const meetingTypes = new Set(
 		db
-			.select({ id: taskTypes.id, name: taskTypes.name })
+			.select({
+				teamId: taskTypes.teamId,
+				id: taskTypes.id,
+				name: taskTypes.name,
+			})
 			.from(taskTypes)
 			.all()
 			.filter((t) => t.name.toLowerCase() === "meeting")
-			.map((t) => t.id),
+			.map((t) => `${t.teamId}:${t.id}`),
 	);
 
 	return rows
@@ -469,7 +474,8 @@ function upcomingToday(
 				status: t.status,
 				statusColor: t.statusColor,
 				listId: t.listId,
-				meeting: t.typeId !== null && meetingTypes.has(t.typeId),
+				meeting:
+					t.typeId !== null && meetingTypes.has(`${t.teamId}:${t.typeId}`),
 				timeOfDay:
 					order === null
 						? null

@@ -1,5 +1,5 @@
 import "@tanstack/react-start/server-only";
-import { and, eq, inArray, isNull, lt } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import type { ClickUpClient } from "../clickup/client";
 import { type ClickUpTask, task, tasksResponse } from "../clickup/schemas";
 import type { Db } from "../db/client";
@@ -12,7 +12,7 @@ type Options = {
 	onProgress?: (upserted: number) => void;
 };
 
-// Pages through the workspace's tasks, active and archived, and upserts them.
+// Pages through a workspace's tasks, active and archived, and upserts them.
 // Returns the number of tasks written.
 export async function syncTasks(
 	db: Db,
@@ -45,14 +45,21 @@ export async function syncTasks(
 		}
 	}
 
-	// A full pass should see every live task, so anything it didn't touch is a
-	// deletion candidate. Pages can shift while paging, so confirm each one
+	// A full pass should see every live task in the workspace, so anything of
+	// it (or of no known workspace yet) it didn't touch is a deletion
+	// candidate. Pages can shift while paging, so confirm each one
 	// before marking it. Incremental runs can't tell, so they skip this.
 	if (updatedAfter === undefined) {
 		const candidates = db
 			.select({ id: tasks.id })
 			.from(tasks)
-			.where(and(lt(tasks.syncedAt, runStartedAt), isNull(tasks.deletedAt)))
+			.where(
+				and(
+					lt(tasks.syncedAt, runStartedAt),
+					isNull(tasks.deletedAt),
+					or(eq(tasks.teamId, teamId), isNull(tasks.teamId)),
+				),
+			)
 			.limit(MAX_DELETE_CHECKS)
 			.all();
 		for (const { id } of candidates) {
@@ -131,6 +138,7 @@ function toRow(t: ClickUpTask, meId: number, now: number) {
 	const assigneeIds = t.assignees.map((a) => a.id);
 	return {
 		id: t.id,
+		teamId: t.team_id ?? null,
 		name: t.name,
 		url: t.url,
 		spaceId: t.space.id,

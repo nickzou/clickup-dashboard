@@ -12,6 +12,7 @@ const schema = z.object({
 	DATABASE_PATH: z.string().default("./data/clickup.db"),
 	MIGRATIONS_DIR: z.string().default("./drizzle"),
 	CLICKUP_TOKEN: z.string().optional(),
+	// One workspace id, or several separated by commas.
 	CLICKUP_TEAM_ID: z.string().optional(),
 	// Day and week boundaries for stats, and the nightly reconcile hour.
 	TZ: z.string().default("UTC"),
@@ -31,4 +32,12 @@ let cached: Env | undefined;
 export function env(): Env {
 	cached ??= schema.parse(process.env);
 	return cached;
+}
+
+// The workspaces to sync, from CLICKUP_TEAM_ID.
+export function teamIds(): string[] {
+	return (env().CLICKUP_TEAM_ID ?? "")
+		.split(",")
+		.map((id) => id.trim())
+		.filter(Boolean);
 }

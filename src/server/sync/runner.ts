@@ -5,10 +5,10 @@ import {
 	type ClickUpClient,
 	createClickUpClient,
 } from "../clickup/client";
-import { userResponse } from "../clickup/schemas";
+import { teamsResponse, userResponse } from "../clickup/schemas";
 import { type Db, getDb } from "../db/client";
-import { syncRuns, tasks } from "../db/schema";
-import { env } from "../env";
+import { syncRuns, tasks, workspaces } from "../db/schema";
+import { env, teamIds } from "../env";
 import { syncCustomFields, syncTaskTypes } from "./fields";
 import { syncHierarchy, syncMissingParents } from "./hierarchy";
 import { syncTasks } from "./tasks";
@@ -77,7 +77,8 @@ export function startSync(requested?: SyncKind): boolean {
 }
 
 async function run(db: Db, kind: SyncKind) {
-	const { CLICKUP_TOKEN, CLICKUP_TEAM_ID } = env();
+	const { CLICKUP_TOKEN } = env();
+	const teams = teamIds();
 	const startedAt = new Date();
 	const { id: runId } = db
 		.insert(syncRuns)
@@ -102,43 +103,76 @@ async function run(db: Db, kind: SyncKind) {
 
 	let client: ClickUpClient | undefined;
 	try {
-		if (!CLICKUP_TOKEN || !CLICKUP_TEAM_ID) {
+		if (!CLICKUP_TOKEN || teams.length === 0) {
 			throw new Error("CLICKUP_TOKEN and CLICKUP_TEAM_ID must be set.");
 		}
 		client = createClickUpClient(CLICKUP_TOKEN, signal);
 		const c = client;
 		const meId = (await c.get("/user", userResponse)).user.id;
+		const names = new Map(
+			(await c.get("/team", teamsResponse)).teams.map((t) => [t.id, t.name]),
+		);
 
-		await syncHierarchy(db, c, CLICKUP_TEAM_ID, {
-			includeArchived: kind !== "incremental",
-		});
+		let upserted = 0;
+		for (const teamId of teams) {
+			if (!names.has(teamId)) {
+				throw new Error(`The token can't see workspace ${teamId}.`);
+			}
+			const known = db
+				.select()
+				.from(workspaces)
+				.where(eq(workspaces.id, teamId))
+				.get();
+			// A workspace new to the dashboard gets a full pass whatever the
+			// run's kind, like the first backfill.
+			const full = kind !== "incremental" || !known?.backfilledAt;
+			const row = {
+				id: teamId,
+				name: names.get(teamId) ?? teamId,
+				syncedAt: Date.now(),
+			};
+			db.insert(workspaces)
+				.values(row)
+				.onConflictDoUpdate({ target: workspaces.id, set: row })
+				.run();
 
-		await syncCustomFields(db, c, CLICKUP_TEAM_ID);
-		await syncTaskTypes(db, c, CLICKUP_TEAM_ID);
+			await syncHierarchy(db, c, teamId, { includeArchived: full });
 
-		const cursor =
-			kind === "incremental"
-				? (lastRun(db, undefined, "ok")?.startedAt.getTime() ?? 0) -
-					CURSOR_OVERLAP_MS
-				: undefined;
-		const upserted = await syncTasks(db, c, CLICKUP_TEAM_ID, {
-			meId,
-			updatedAfter: cursor,
-			onProgress: (n) => {
-				if (running) running.progress = n;
-			},
-		});
+			await syncCustomFields(db, c, teamId);
+			await syncTaskTypes(db, c, teamId);
+
+			const cursor = full
+				? undefined
+				: (lastRun(db, undefined, "ok")?.startedAt.getTime() ?? 0) -
+					CURSOR_OVERLAP_MS;
+			upserted += await syncTasks(db, c, teamId, {
+				meId,
+				updatedAfter: cursor,
+				onProgress: (n) => {
+					if (running) running.progress = upserted + n;
+				},
+			});
+
+			// A backfill reaches back to the workspace's first task.
+			const timeFrom =
+				kind === "backfill" || !known?.backfilledAt
+					? (db
+							.select({ first: min(tasks.dateCreated) })
+							.from(tasks)
+							.where(eq(tasks.teamId, teamId))
+							.get()?.first ?? Date.now() - 30 * DAY_MS)
+					: Date.now() - (kind === "reconcile" ? 90 : 7) * DAY_MS;
+			await syncTimeEntries(db, c, teamId, timeFrom);
+
+			if (!known?.backfilledAt) {
+				db.update(workspaces)
+					.set({ backfilledAt: Date.now() })
+					.where(eq(workspaces.id, teamId))
+					.run();
+			}
+		}
 
 		await syncMissingParents(db, c);
-
-		const timeFrom =
-			kind === "backfill"
-				? (db
-						.select({ first: min(tasks.dateCreated) })
-						.from(tasks)
-						.get()?.first ?? Date.now() - 30 * DAY_MS)
-				: Date.now() - (kind === "reconcile" ? 90 : 7) * DAY_MS;
-		await syncTimeEntries(db, c, CLICKUP_TEAM_ID, timeFrom);
 
 		db.update(syncRuns)
 			.set({

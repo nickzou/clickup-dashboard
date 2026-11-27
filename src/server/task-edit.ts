@@ -31,12 +31,12 @@ const detailResponse = task.extend({
 
 function knownTask(id: string) {
 	const row = getDb()
-		.select({ id: tasks.id })
+		.select({ id: tasks.id, teamId: tasks.teamId })
 		.from(tasks)
 		.where(eq(tasks.id, id))
 		.get();
 	if (!row) throw new Error("That task isn't synced.");
-	return row.id;
+	return row;
 }
 
 // Reads the task back in the shape the sync stores, so the dashboard
@@ -49,10 +49,11 @@ async function refresh(c: ClickUpClient, id: string) {
 // Task types worth picking: Task itself (0), Milestone, and the workspace's
 // own (ids from 1000). ClickUp's system types (form responses, AI skills,
 // ...) are left out.
-function pickableTypes() {
+function pickableTypes(teamId: string) {
 	const custom = getDb()
 		.select({ id: taskTypes.id, name: taskTypes.name })
 		.from(taskTypes)
+		.where(eq(taskTypes.teamId, teamId))
 		.all()
 		.filter((t) => t.id === 1 || t.id >= 1000)
 		.map((t) => ({
@@ -80,18 +81,19 @@ export const getTaskDetail = createServerFn({ method: "GET" })
 	.validator(z.object({ taskId }))
 	.handler(async ({ data }) => {
 		const { TZ } = env();
-		const id = knownTask(data.taskId);
+		const { id } = knownTask(data.taskId);
 		const c = tokenClient();
 		const t = await c.get(`/task/${id}`, detailResponse, {
 			include_markdown_description: true,
 		});
 		saveTask(getDb(), t, await getMeId(c));
+		const teamId = t.team_id ?? null;
 		const { statuses } = await c.get(
 			`/list/${t.list.id}`,
 			listStatusesResponse,
 		);
 
-		const field = timeOfDayField();
+		const field = timeOfDayField(teamId);
 		const value = field
 			? t.custom_fields.find((f) => f.id === field.id)
 			: undefined;
@@ -112,9 +114,10 @@ export const getTaskDetail = createServerFn({ method: "GET" })
 			timeOfDay: option?.id ?? "",
 			// null and 0 both mean a plain task.
 			typeId: t.custom_item_id ?? 0,
-			types: pickableTypes(),
+			types: teamId ? pickableTypes(teamId) : [{ id: 0, name: "Task" }],
 			listId: t.list.id,
-			lists: openLists(),
+			// Tasks move within their workspace only.
+			lists: openLists().filter((l) => l.teamId === teamId),
 			timeOfDayOptions: field?.options ?? [],
 			statuses: statuses
 				.sort((a, b) => a.orderindex - b.orderindex)
@@ -148,11 +151,13 @@ export const updateTask = createServerFn({ method: "POST" })
 	.validator(z.object({ taskId, changes }))
 	.handler(async ({ data }) => {
 		const { TZ } = env();
-		const id = knownTask(data.taskId);
+		const { id, teamId } = knownTask(data.taskId);
 		const ch = data.changes;
 		const c = tokenClient();
 
-		if (ch.listId !== undefined) await moveTask(c, id, ch.listId, ch.status);
+		if (ch.listId !== undefined) {
+			await moveTask(c, id, teamId, ch.listId, ch.status);
+		}
 
 		const body: Record<string, unknown> = {};
 		if (ch.name !== undefined) body.name = ch.name;
@@ -172,7 +177,7 @@ export const updateTask = createServerFn({ method: "POST" })
 		}
 
 		if (ch.timeOfDay !== undefined) {
-			const field = timeOfDayField();
+			const field = timeOfDayField(teamId);
 			if (!field) throw new Error("The Time of Day field isn't synced.");
 			if (ch.timeOfDay === null) {
 				await c.delete(`/task/${id}/field/${field.id}`);
@@ -196,12 +201,13 @@ export const updateTask = createServerFn({ method: "POST" })
 async function moveTask(
 	c: ClickUpClient,
 	id: string,
+	teamId: string | null,
 	listId: string,
 	status: string | undefined,
 ) {
-	const { CLICKUP_TEAM_ID } = env();
-	if (!openLists().some((l) => l.id === listId)) {
-		throw new Error("That list isn't synced.");
+	if (!teamId) throw new Error("That task's workspace isn't synced yet.");
+	if (!openLists().some((l) => l.id === listId && l.teamId === teamId)) {
+		throw new Error("That list isn't in the task's workspace.");
 	}
 	const current = await c.get(`/task/${id}`, task);
 	const { statuses } = await c.get(`/list/${listId}`, listStatusesResponse);
@@ -217,7 +223,7 @@ async function moveTask(
 		throw new Error("ClickUp didn't return status ids to map.");
 	}
 	await c.put(
-		`/v3/workspaces/${CLICKUP_TEAM_ID}/tasks/${id}/home_list/${listId}`,
+		`/v3/workspaces/${teamId}/tasks/${id}/home_list/${listId}`,
 		z.unknown(),
 		kept
 			? {}
@@ -238,7 +244,7 @@ export const deleteTask = createServerFn({ method: "POST" })
 	.middleware([requireAuth])
 	.validator(z.object({ taskId }))
 	.handler(async ({ data }) => {
-		const id = knownTask(data.taskId);
+		const { id } = knownTask(data.taskId);
 		await tokenClient().delete(`/task/${id}`);
 		getDb()
 			.update(tasks)

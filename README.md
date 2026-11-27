@@ -41,7 +41,7 @@ One password, stored only as an argon2 hash. Login sets a 30-day HMAC-signed, ht
 
 ## ClickUp sync
 
-A Nitro plugin (`src/server/plugins/sync.ts`) starts a scheduler with the server. It mirrors the workspace in `CLICKUP_TEAM_ID` into SQLite, read-only, and every chart reads from SQLite.
+A Nitro plugin (`src/server/plugins/sync.ts`) starts a scheduler with the server. It mirrors the workspaces in `CLICKUP_TEAM_ID` (comma-separated) into SQLite, read-only, and every chart reads from SQLite. A workspace added later gets its own full pass on the next run.
 
 | Run | When | Does |
 |---|---|---|

@@ -1,5 +1,5 @@
 import "@tanstack/react-start/server-only";
-import { notInArray } from "drizzle-orm";
+import { eq, notInArray } from "drizzle-orm";
 import type { ClickUpClient } from "../clickup/client";
 import {
 	foldersResponse,
@@ -29,12 +29,17 @@ export async function syncHierarchy(
 			{ archived },
 		);
 		for (const s of spaceRows) {
-			upsertSpace(db, { ...s, archived: s.archived || archived }, now);
+			upsertSpace(db, { ...s, teamId, archived: s.archived || archived }, now);
 		}
 	}
 
-	// Lists can be archived inside an active space, so walk every known space.
-	const allSpaces = db.select({ id: spaces.id }).from(spaces).all();
+	// Lists can be archived inside an active space, so walk every known space
+	// of the workspace.
+	const allSpaces = db
+		.select({ id: spaces.id })
+		.from(spaces)
+		.where(eq(spaces.teamId, teamId))
+		.all();
 	for (const { id: spaceId } of allSpaces) {
 		for (const archived of passes) {
 			const { folders: folderRows } = await client.get(
@@ -108,17 +113,31 @@ export async function syncMissingParents(db: Db, client: ClickUpClient) {
 		.all();
 	for (const { id } of missingSpaces) {
 		const s = await client.find(`/space/${id}`, space);
-		if (s) upsertSpace(db, s, now);
+		// The space's workspace, from its tasks.
+		const teamId =
+			db
+				.select({ teamId: tasks.teamId })
+				.from(tasks)
+				.where(eq(tasks.spaceId, id))
+				.get()?.teamId ?? null;
+		if (s) upsertSpace(db, { ...s, teamId }, now);
 	}
 }
 
 function upsertSpace(
 	db: Db,
-	s: { id: string; name: string; color?: string | null; archived: boolean },
+	s: {
+		id: string;
+		teamId: string | null;
+		name: string;
+		color?: string | null;
+		archived: boolean;
+	},
 	now: number,
 ) {
 	const row = {
 		id: s.id,
+		teamId: s.teamId,
 		name: s.name,
 		color: s.color ?? null,
 		archived: s.archived,

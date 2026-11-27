@@ -13,6 +13,10 @@ export const userResponse = z.object({
 	user: z.object({ id: z.number() }),
 });
 
+export const teamsResponse = z.object({
+	teams: z.array(z.object({ id: z.string(), name: z.string() })),
+});
+
 export const space = z.object({
 	id: z.string(),
 	name: z.string(),
@@ -62,6 +66,7 @@ const fieldTypeConfig = z
 
 export const task = z.object({
 	id: z.string(),
+	team_id: z.string().nullish(),
 	name: z.string(),
 	url: z.string(),
 	status: z.object({

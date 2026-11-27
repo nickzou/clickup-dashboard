@@ -1,11 +1,13 @@
 import "@tanstack/react-start/server-only";
+import { eq, isNull, or } from "drizzle-orm";
 import type { ClickUpClient } from "../clickup/client";
 import { fieldsResponse, taskTypesResponse } from "../clickup/schemas";
 import type { Db } from "../db/client";
 import { customFields, type FieldOption, taskTypes } from "../db/schema";
 
-// Workspace custom fields, replaced on every run: one request, and option
+// A workspace's custom fields, replaced on every run: one request, and option
 // names and colors stay current when they're renamed or recolored in ClickUp.
+// Rows from before workspaces were tracked go with the first replacement.
 export async function syncCustomFields(
 	db: Db,
 	client: ClickUpClient,
@@ -14,7 +16,9 @@ export async function syncCustomFields(
 	const { fields } = await client.get(`/team/${teamId}/field`, fieldsResponse);
 	const now = Date.now();
 	db.transaction((tx) => {
-		tx.delete(customFields).run();
+		tx.delete(customFields)
+			.where(or(eq(customFields.teamId, teamId), isNull(customFields.teamId)))
+			.run();
 		for (const f of fields) {
 			const options: FieldOption[] = (f.type_config?.options ?? []).flatMap(
 				(o) =>
@@ -32,6 +36,7 @@ export async function syncCustomFields(
 			tx.insert(customFields)
 				.values({
 					id: f.id,
+					teamId,
 					name: f.name,
 					type: f.type,
 					options,
@@ -54,10 +59,10 @@ export async function syncTaskTypes(
 	);
 	const now = Date.now();
 	db.transaction((tx) => {
-		tx.delete(taskTypes).run();
+		tx.delete(taskTypes).where(eq(taskTypes.teamId, teamId)).run();
 		for (const t of custom_items) {
 			tx.insert(taskTypes)
-				.values({ id: t.id, name: t.name, syncedAt: now })
+				.values({ teamId, id: t.id, name: t.name, syncedAt: now })
 				.run();
 		}
 	});

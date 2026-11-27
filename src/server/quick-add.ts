@@ -6,12 +6,17 @@ import { createClickUpClient } from "./clickup/client";
 import { getMeId } from "./clickup/me";
 import { task } from "./clickup/schemas";
 import { getDb } from "./db/client";
-import { lists } from "./db/schema";
+import { lists, spaces } from "./db/schema";
 import { env } from "./env";
 import { INBOX } from "./inbox";
 import { dayKey, zonedMs } from "./stats/dates";
 import { saveTask } from "./sync/tasks";
-import { type OpenList, openLists, timeOfDayField } from "./task-options";
+import {
+	type OpenList,
+	openLists,
+	timeOfDayByTeam,
+	timeOfDayField,
+} from "./task-options";
 
 export type CaptureList = OpenList;
 
@@ -27,7 +32,8 @@ export const getCaptureLists = createServerFn({ method: "GET" })
 			inboxId: inbox?.id ?? null,
 			lists: rows,
 			defaultId: inbox?.id ?? rows[0]?.id ?? null,
-			timeOfDay: timeOfDayField()?.options ?? [],
+			// Keyed by workspace: the picker offers the chosen list's.
+			timeOfDay: timeOfDayByTeam(rows),
 			// Due today by default, except in the inbox (see the form).
 			today: dayKey(Date.now(), env().TZ),
 		};
@@ -75,13 +81,14 @@ export const createTask = createServerFn({ method: "POST" })
 		if (!CLICKUP_TOKEN) throw new Error("CLICKUP_TOKEN is not set.");
 		const db = getDb();
 		const list = db
-			.select({ id: lists.id })
+			.select({ id: lists.id, teamId: spaces.teamId })
 			.from(lists)
+			.innerJoin(spaces, eq(spaces.id, lists.spaceId))
 			.where(eq(lists.id, data.listId))
 			.get();
 		if (!list) throw new Error("That list isn't synced.");
 
-		const field = data.timeOfDay ? timeOfDayField() : null;
+		const field = data.timeOfDay ? timeOfDayField(list.teamId) : null;
 		if (
 			data.timeOfDay &&
 			!field?.options.some((o) => o.id === data.timeOfDay)

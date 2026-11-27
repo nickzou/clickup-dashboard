@@ -1,5 +1,5 @@
 import "@tanstack/react-start/server-only";
-import { and, gte, lt } from "drizzle-orm";
+import { and, eq, gte, isNull, lt, or } from "drizzle-orm";
 import type { ClickUpClient } from "../clickup/client";
 import { timeEntriesResponse } from "../clickup/schemas";
 import type { Db } from "../db/client";
@@ -7,9 +7,9 @@ import { timeEntries } from "../db/schema";
 
 const WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
-// Fetches the token user's time entries between `from` and now in 30-day
-// windows. Each window replaces what's stored for it, so edits and deletions
-// in ClickUp are picked up.
+// Fetches the token user's time entries in a workspace between `from` and
+// now in 30-day windows. Each window replaces what's stored for it, so edits
+// and deletions in ClickUp are picked up.
 export async function syncTimeEntries(
 	db: Db,
 	client: ClickUpClient,
@@ -26,7 +26,13 @@ export async function syncTimeEntries(
 		);
 		db.transaction((tx) => {
 			tx.delete(timeEntries)
-				.where(and(gte(timeEntries.start, start), lt(timeEntries.start, end)))
+				.where(
+					and(
+						gte(timeEntries.start, start),
+						lt(timeEntries.start, end),
+						or(eq(timeEntries.teamId, teamId), isNull(timeEntries.teamId)),
+					),
+				)
 				.run();
 			for (const e of data) {
 				// A negative duration is a timer that's still running.
@@ -34,6 +40,7 @@ export async function syncTimeEntries(
 				tx.insert(timeEntries)
 					.values({
 						id: e.id,
+						teamId,
 						taskId: e.task?.id ?? null,
 						start: e.start,
 						duration: e.duration,

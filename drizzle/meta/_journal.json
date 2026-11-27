@@ -36,6 +36,13 @@
       "when": 1795617316633,
       "tag": "0004_task_types",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1795799697452,
+      "tag": "0005_workspaces",
+      "breakpoints": true
     }
   ]
 }

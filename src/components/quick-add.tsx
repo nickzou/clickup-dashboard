@@ -103,6 +103,12 @@ function QuickAddForm({ onDone }: { onDone: () => void }) {
 	const [timeOfDay, setTimeOfDay] = useState("");
 	const [saving, setSaving] = useState(false);
 	const selected = listId ?? data?.defaultId ?? undefined;
+	// Time of Day is a field of the list's workspace, if it has one.
+	const team = data?.lists.find((l) => l.id === selected)?.teamId ?? "";
+	const timeOfDayOptions = data?.timeOfDay[team] ?? [];
+	const pickedTimeOfDay = timeOfDayOptions.some((o) => o.id === timeOfDay)
+		? timeOfDay
+		: "";
 	const due =
 		dueDate ?? (selected === data?.inboxId ? "" : (data?.today ?? ""));
 	const start = startDate
@@ -121,7 +127,7 @@ function QuickAddForm({ onDone }: { onDone: () => void }) {
 					name,
 					notes: notes || undefined,
 					listId: selected,
-					timeOfDay: timeOfDay || undefined,
+					timeOfDay: pickedTimeOfDay || undefined,
 					start,
 					due: end,
 				},
@@ -211,8 +217,8 @@ function QuickAddForm({ onDone }: { onDone: () => void }) {
 			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 				<TimeOfDaySelect
 					id="quick-add-time-of-day"
-					options={data?.timeOfDay ?? []}
-					value={timeOfDay}
+					options={timeOfDayOptions}
+					value={pickedTimeOfDay}
 					onChange={setTimeOfDay}
 				/>
 				<ListSelect
