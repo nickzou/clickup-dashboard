@@ -5,7 +5,7 @@ import { EmptyState } from "#/components/empty-state";
 import { CompletionsChart } from "#/components/overview/completions-chart";
 import { OverviewFilters } from "#/components/overview/filters";
 import { Heatmap } from "#/components/overview/heatmap";
-import { KpiTile } from "#/components/overview/kpi-tile";
+import { KpiFooterStat, KpiTile } from "#/components/overview/kpi-tile";
 import { OutcomeBreakdown } from "#/components/overview/outcome-breakdown";
 import { SpaceBreakdown } from "#/components/overview/space-breakdown";
 import { UpcomingList } from "#/components/overview/upcoming-list";
@@ -77,7 +77,7 @@ function OverviewPage() {
 		<div className="grid grid-cols-1 gap-4 md:gap-6">
 			{filters}
 
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)]">
+			<div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
 				<KpiTile
 					label="Completed"
 					value={kpis.completed.toLocaleString()}
@@ -90,6 +90,14 @@ function OverviewPage() {
 						kpis.completionRate === null
 							? undefined
 							: `${Math.round(kpis.completionRate * 100)}% of resolved tasks done`
+					}
+					footer={
+						<KpiFooterStat
+							label="Overdue"
+							value={kpis.overdue.toLocaleString()}
+							detail="Open, past due, not waiting on others"
+							tone={kpis.overdue > 0 ? "critical" : undefined}
+						/>
 					}
 				/>
 				<Card className="gap-3">
@@ -105,12 +113,6 @@ function OverviewPage() {
 						<UpcomingList tasks={data.upcoming} />
 					</CardContent>
 				</Card>
-				<KpiTile
-					label="Overdue"
-					value={kpis.overdue.toLocaleString()}
-					detail="Open, past due, not waiting on others"
-					tone={kpis.overdue > 0 ? "critical" : undefined}
-				/>
 			</div>
 
 			<div className="grid grid-cols-1 gap-4 md:gap-6 xl:grid-cols-3 big-screen:grid-cols-3">
@@ -203,8 +205,8 @@ function OverviewSkeleton() {
 	return (
 		<div className="grid grid-cols-1 gap-4 md:gap-6">
 			<Skeleton className="h-9 w-80 max-w-full" />
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)]">
-				{[0, 1, 2].map((i) => (
+			<div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+				{[0, 1].map((i) => (
 					<Skeleton key={i} className="h-32 rounded-xl" />
 				))}
 			</div>

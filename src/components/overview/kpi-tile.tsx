@@ -1,4 +1,5 @@
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
+import type { ReactNode } from "react";
 import {
 	Card,
 	CardContent,
@@ -8,6 +9,38 @@ import {
 } from "#/components/ui/card";
 import { cn } from "#/lib/utils";
 
+// A small labeled count for a tile's footer, red when it needs attention.
+export function KpiFooterStat({
+	label,
+	value,
+	detail,
+	tone,
+}: {
+	label: string;
+	value: string;
+	detail?: string;
+	tone?: "critical";
+}) {
+	return (
+		<div className="flex items-baseline justify-between gap-2 text-sm">
+			<div className="grid min-w-0">
+				<span className="font-medium">{label}</span>
+				{detail && (
+					<span className="text-xs text-muted-foreground">{detail}</span>
+				)}
+			</div>
+			<span
+				className={cn(
+					"text-xl font-semibold tabular-nums",
+					tone === "critical" && "text-[#d03b3b]",
+				)}
+			>
+				{value}
+			</span>
+		</div>
+	);
+}
+
 export type Delta = { current: number; previous: number; label: string };
 
 export function KpiTile({
@@ -16,6 +49,7 @@ export function KpiTile({
 	detail,
 	delta,
 	tone,
+	footer,
 }: {
 	label: string;
 	value: string;
@@ -23,6 +57,8 @@ export function KpiTile({
 	delta?: Delta;
 	// Marks a value that needs attention (e.g. overdue > 0).
 	tone?: "critical";
+	// A secondary figure under a rule, e.g. Overdue under Completed.
+	footer?: ReactNode;
 }) {
 	return (
 		<Card className="gap-2">
@@ -42,6 +78,9 @@ export function KpiTile({
 					{delta && <DeltaLine {...delta} />}
 					{detail && <span>{detail}</span>}
 				</CardContent>
+			)}
+			{footer && (
+				<CardContent className="mt-auto border-t pt-3">{footer}</CardContent>
 			)}
 		</Card>
 	);
