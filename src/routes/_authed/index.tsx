@@ -77,7 +77,7 @@ function OverviewPage() {
 		<div className="grid grid-cols-1 gap-4 md:gap-6">
 			{filters}
 
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] big-screen:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)]">
+			<div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)] big-screen:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)]">
 				<KpiTile
 					label="Completed"
 					value={kpis.completed.toLocaleString()}
@@ -100,7 +100,10 @@ function OverviewPage() {
 						/>
 					}
 				/>
-				<Card className="gap-3">
+				{/* Last from tablet up (full width under the two tiles there, the
+				    wide third column from xl); second on phones, where it matters
+				    most. */}
+				<Card className="gap-3 md:order-last md:col-span-2 xl:col-span-1 big-screen:col-span-1">
 					<CardHeader>
 						<CardDescription>Upcoming</CardDescription>
 						<CardTitle className="text-sm font-normal text-muted-foreground">
@@ -113,8 +116,7 @@ function OverviewPage() {
 						<UpcomingList tasks={data.upcoming} />
 					</CardContent>
 				</Card>
-				{/* Full width under the two on tablets; third column from xl up. */}
-				<Card className="md:col-span-2 xl:col-span-1 big-screen:col-span-1">
+				<Card>
 					<CardHeader>
 						<CardTitle>Outcomes</CardTitle>
 						<CardDescription>

@@ -61,6 +61,23 @@ export const RANGES = {
 		bucket: "day",
 		bounds: lastDays(7),
 	},
+	// This week and the three whole weeks before it, one bar per week, for
+	// week over week. Compared with the four weeks before, cut at the same
+	// weekday as This week is (too long to spell out under the tile).
+	"4w": {
+		label: "4 weeks",
+		text: "the last 4 weeks",
+		prevText: "previous 4 weeks",
+		bucket: "week",
+		bounds: (today) => {
+			const from = addDays(weekStart(today), -21);
+			return {
+				from,
+				prevFrom: addDays(from, -28),
+				prevTo: addDays(today, -28),
+			};
+		},
+	},
 	"30d": {
 		label: "30 days",
 		text: "the last 30 days",

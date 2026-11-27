@@ -23,7 +23,7 @@ export function OverviewFilters({
 }) {
 	return (
 		<div className="flex flex-wrap items-center gap-2">
-			{/* Six ranges don't fit a phone's width as buttons; use a menu there. */}
+			{/* Seven ranges don't fit a phone's width as buttons; use a menu there. */}
 			<Select
 				value={range}
 				onValueChange={(v) => onChange({ range: v as RangeKey })}

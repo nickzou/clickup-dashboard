@@ -192,7 +192,7 @@ export function getOverviewStats(
 	const completionRate =
 		resolvedInRange > 0 ? completed / resolvedInRange : null;
 
-	// Finished tasks by outcome, daily up to 90 days, weekly beyond. Today has
+	// Finished tasks by outcome, per day or per week as the range says. Today has
 	// no series: its chart is the by-space breakdown.
 	const series: ({ date: string } & OutcomeCounts)[] = [];
 	if (bucket === "day" || bucket === "week") {
