@@ -22,7 +22,7 @@ export function KpiFooterStat({
 	tone?: "critical";
 }) {
 	return (
-		<div className="flex items-baseline justify-between gap-2 text-sm">
+		<div className="flex items-center justify-between gap-2 text-sm">
 			<div className="grid min-w-0">
 				<span className="font-medium">{label}</span>
 				{detail && (
